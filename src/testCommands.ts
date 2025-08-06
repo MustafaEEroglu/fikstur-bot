@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ChannelType } from 'discord.js';
 import { SupabaseService } from './services/supabase';
 
 export const testCommands = [
@@ -75,12 +75,27 @@ export async function handleTestCommand(interaction: any, supabase: SupabaseServ
         
         const voiceChannel = await guild.channels.create({
           name: '🧪 TEST MAÇ ODASI',
-          type: 2, // Voice channel
+          type: ChannelType.GuildVoice,
           reason: 'Test sesli oda',
         });
         
-        await voiceChannel.send('🧪 **TEST SESLİ ODA**');
-        await voiceChannel.send('Bu bir test odasıdır!');
+        // Test için embed bildirim gönder
+        const testEmbed = new EmbedBuilder()
+          .setColor('#00ff00')
+          .setTitle('🏟️ MAÇ ODASI HAZIR!')
+          .setDescription('**Galatasaray vs Fenerbahçe**')
+          .addFields(
+            { name: '📅 Maç Tarihi', value: '06.08.2025 20:00', inline: true },
+            { name: '🏟️ Lig', value: 'Süper Lig', inline: true },
+            { name: '📺 Yayın', value: 'TRT Spor', inline: true },
+            { name: '🔔 Bildirim', value: '<@&GalatasarayRoluID> Galatasaraylılar! Maç başlıyor!', inline: false }
+          )
+          .setThumbnail('https://example.com/logo1.png')
+          .setImage('https://example.com/logo2.png')
+          .setFooter({ text: 'Galatasaray takımını destekleyin!' })
+          .setTimestamp();
+        
+        await voiceChannel.send({ embeds: [testEmbed] });
         
         // 5 dakika sonra otomatik sil
         setTimeout(async () => {

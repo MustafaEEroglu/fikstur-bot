@@ -21,6 +21,7 @@ export interface Match {
   drawProbability?: number;
   notified?: boolean;
   voice_room_created?: boolean;
+  event_id?: string | null;
 }
 
 export interface DiscordRole {

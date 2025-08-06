@@ -163,6 +163,57 @@ export class SupabaseService {
     if (error) throw new Error(`Error updating match status: ${error.message}`);
   }
 
+  async updateMatchWithEventId(matchId: number, eventId: string): Promise<void> {
+    const { error } = await this.adminClient
+      .from('matches')
+      .update({ event_id: eventId })
+      .eq('id', matchId);
+
+    if (error) throw new Error(`Error updating match with event ID: ${error.message}`);
+  }
+
+  async getMatchesByEventId(eventId: string): Promise<Match[]> {
+    const { data, error } = await this.client
+      .from('matches')
+      .select('*')
+      .eq('event_id', eventId);
+
+    if (error) throw new Error(`Error fetching matches by event ID: ${error.message}`);
+    return data || [];
+  }
+
+  async createEvent(matchId: number, discordEventId: string): Promise<any> {
+    const { data, error } = await this.adminClient
+      .from('events')
+      .insert({
+        match_id: matchId,
+        discord_event_id: discordEventId,
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(`Error creating event: ${error.message}`);
+    return data;
+  }
+
+  async updateEvent(eventId: number, updates: Partial<any>): Promise<void> {
+    const { error } = await this.adminClient
+      .from('events')
+      .update(updates)
+      .eq('id', eventId);
+
+    if (error) throw new Error(`Error updating event: ${error.message}`);
+  }
+
+  async deleteEventByDiscordId(discordEventId: string): Promise<void> {
+    const { error } = await this.adminClient
+      .from('events')
+      .delete()
+      .eq('discord_event_id', discordEventId);
+
+    if (error) throw new Error(`Error deleting event: ${error.message}`);
+  }
+
   // Role operations
   async getRoles(): Promise<DiscordRole[]> {
     // Check cache first

@@ -262,13 +262,32 @@ export class SerpApiService {
       let time = game.time || '20:00'; // Default time if not specified
       
       // Convert 12-hour format to 24-hour format
-      if (time.includes('PM') && !time.includes('12')) {
-        const [hour, minute] = time.replace(' PM', '').split(':');
-        time = `${parseInt(hour) + 12}:${minute}`;
-      } else if (time.includes('AM') && time.startsWith('12')) {
-        time = `00:${time.split(':')[1]}`;
-      } else if (time.includes(' AM')) {
-        time = time.replace(' AM', '');
+      if (time.includes('PM') || time.includes('pm')) {
+        const cleanTime = time.replace(' PM', '').replace(' pm', '').replace('P.M.', '').replace('p.m.', '');
+        const [hour, minute] = cleanTime.split(':');
+        let hour24 = parseInt(hour);
+        if (hour24 !== 12) {
+          hour24 += 12;
+        }
+        time = `${hour24.toString().padStart(2, '0')}:${minute}`;
+      } else if (time.includes('AM') || time.includes('am')) {
+        const cleanTime = time.replace(' AM', '').replace(' am').replace('A.M.', '').replace('a.m.', '');
+        const [hour, minute] = cleanTime.split(':');
+        let hour24 = parseInt(hour);
+        if (hour24 === 12) {
+          hour24 = 0;
+        }
+        time = `${hour24.toString().padStart(2, '0')}:${minute}`;
+      }
+      
+      // Ensure time is in HH:MM format
+      const timeParts = time.split(':');
+      if (timeParts.length === 2) {
+        const hour = parseInt(timeParts[0]);
+        const minute = parseInt(timeParts[1]);
+        if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+          time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        }
       }
       
       const formattedDate = `${gameDate.getFullYear()}-${String(gameDate.getMonth() + 1).padStart(2, '0')}-${String(gameDate.getDate()).padStart(2, '0')}T${time}:00+03:00`;

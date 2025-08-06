@@ -12,9 +12,12 @@ Discord tabanlı otomatik maç fikstürü bildirim botu. Bot, belirli liglerdeki
 
 ### 🎵 Sesli Oda Yönetimi
 - Maç başlamadan 15 dakika önce otomatik sesli oda oluşturma
-- Mevcut odalarda duplicate oda oluşturmayı engelleme
-- Oda oluşturma zamanlamasının en üstte olması
-- 3 saat sonra otomatik oda temizleme
+- **Duplicate oda oluşturmayı engelleme** - Aynı anda birden fazla maç olsa bile sadece 1 oda
+- **Bilgilendirici oda isimleri** - Takım kısaltmaları ve lig bilgisi içeren oda isimleri
+- **Oda konumu** - Yeni oluşturulan odalar en üstte yer alır
+- **3 saat sonra otomatik oda temizleme** - Maç bitiminde otomatik temizleme
+- **Discord Etkinlikleri** - Sesli odalar için Discord etkinlikleri oluşturma
+- **Zengin bildirimler** - Embed formatında rol etiketlemeli bildirimler
 
 ### 📅 Haftalık Fikstür
 - `/hafta` komutu ile gelecek 7 günlük maçları görüntüleme
@@ -188,7 +191,19 @@ CREATE TABLE matches (
   away_win_probability INTEGER,
   draw_probability INTEGER,
   notified BOOLEAN DEFAULT FALSE,
-  voice_room_created BOOLEAN DEFAULT FALSE
+  voice_room_created BOOLEAN DEFAULT FALSE,
+  event_id VARCHAR(255) -- Discord etkinlik ID'si
+);
+```
+
+### events Tablosu
+```sql
+CREATE TABLE events (
+  id SERIAL PRIMARY KEY,
+  match_id INTEGER REFERENCES matches(id) ON DELETE CASCADE,
+  discord_event_id VARCHAR(255) UNIQUE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ```
 

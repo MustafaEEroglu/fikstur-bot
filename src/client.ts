@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Collection, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, VoiceChannel } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, VoiceChannel, GuildScheduledEvent, GuildScheduledEventPrivacyLevel, GuildScheduledEventEntityType } from 'discord.js';
 import { config } from './utils/config';
 import { SupabaseService } from './services/supabase';
 import { OpenRouterService } from './services/openrouter';
@@ -123,8 +123,8 @@ export class DiscordClient extends Client {
         const channel = this.channels.cache.get(existingRoom) as VoiceChannel;
         if (channel) {
           for (const match of matches) {
-            const role = await this.getRoleForMatch(match);
-            await channel.send(`${role} Oda hazır!`);
+            const embed = await this.createVoiceRoomNotification(match);
+            await channel.send({ embeds: [embed] });
           }
         }
         return;
@@ -135,18 +135,40 @@ export class DiscordClient extends Client {
         const guild = this.guilds.cache.get(config.discord.guildId);
         if (!guild) return;
 
+        // Create informative channel name with team abbreviations
+        const firstMatch = matches[0];
+        const homeTeamAbbr = firstMatch.homeTeam.short_name || firstMatch.homeTeam.name.substring(0, 3).toUpperCase();
+        const awayTeamAbbr = firstMatch.awayTeam.short_name || firstMatch.awayTeam.name.substring(0, 3).toUpperCase();
+        const leagueName = firstMatch.league.replace(/[^a-zA-Z0-9şğüıöçŞĞÜİÖÇ\s]/g, '').substring(0, 15);
+        
+        const channelName = `🏟️ ${homeTeamAbbr} vs ${awayTeamAbbr} | ${leagueName}`;
+        
+        // Get the highest position among voice channels to place new channel at the top
+        const voiceChannels = guild.channels.cache.filter(c => c.type === ChannelType.GuildVoice);
+        const highestPosition = voiceChannels.size > 0 ? 
+          Math.max(...voiceChannels.map(c => c.position)) + 1 : 0;
+
         const channel = await guild.channels.create({
-          name: '🏟️ Maç Odası',
+          name: channelName,
           type: ChannelType.GuildVoice,
           reason: 'Match starting soon',
+          position: highestPosition, // Place at the top
         });
 
         this.voiceChannels.add(channel.id);
 
-        // Send notifications
+        // Send notifications with embed
         for (const match of matches) {
-          const role = await this.getRoleForMatch(match);
-          await channel.send(`${role} Oda hazır!`);
+          const embed = await this.createVoiceRoomNotification(match);
+          await channel.send({ embeds: [embed] });
+        }
+
+        // Create Discord scheduled event for the voice channel
+        try {
+          await this.createGuildEventWithRetry(matches[0], channel);
+          console.log(`✅ Discord etkinliği oluşturuldu: ${matches[0].homeTeam.name} vs ${matches[0].awayTeam.name}`);
+        } catch (error) {
+          console.error('❌ Discord etkinliği oluşturulamadı:', error);
         }
 
         // Schedule room cleanup (3 hours after the first match time)
@@ -278,6 +300,148 @@ export class DiscordClient extends Client {
 
     return '';
   }
+
+  private async createVoiceRoomNotification(match: Match): Promise<EmbedBuilder> {
+    // Check if teams exist before accessing their properties
+    if (!match.homeTeam || !match.homeTeam.name) {
+      console.error('Home team data is missing or invalid:', match.homeTeam);
+      return this.createErrorEmbed('Ev takım bilgisi eksik');
+    }
+    
+    if (!match.awayTeam || !match.awayTeam.name) {
+      console.error('Away team data is missing or invalid:', match.awayTeam);
+      return this.createErrorEmbed('Deplasman takım bilgisi eksik');
+    }
+
+    try {
+      const role = await this.getRoleForMatch(match);
+      const matchTime = format(new Date(match.date), 'dd.MM.yyyy HH:mm');
+      
+      // Determine which team to highlight based on role
+      let highlightedTeam = '';
+      let roleDescription = '';
+      
+      if (role) {
+        // Extract team name from role
+        const roleName = role.replace(/<@&|>/g, '');
+        const roles = await this.supabase.getRoles();
+        const roleInfo = roles.find(r => r.id === roleName);
+        
+        if (roleInfo) {
+          if (roleInfo.name.toLowerCase().includes('galatasaray')) {
+            highlightedTeam = match.homeTeam.name.toLowerCase().includes('galatasaray') ? match.homeTeam.name : match.awayTeam.name;
+            roleDescription = `${role} Galatasaraylılar! Maç başlıyor!`;
+          } else if (roleInfo.name.toLowerCase().includes('fenerbahçe')) {
+            highlightedTeam = match.homeTeam.name.toLowerCase().includes('fenerbahçe') ? match.homeTeam.name : match.awayTeam.name;
+            roleDescription = `${role} Fenerbahçeliler! Maç başlıyor!`;
+          } else if (roleInfo.name.toLowerCase().includes('beşiktaş')) {
+            highlightedTeam = match.homeTeam.name.toLowerCase().includes('beşiktaş') ? match.homeTeam.name : match.awayTeam.name;
+            roleDescription = `${role} Beşiktaşlılar! Maç başlıyor!`;
+          } else if (roleInfo.name.toLowerCase().includes('barbar')) {
+            highlightedTeam = 'Yabancı Takım';
+            roleDescription = `${role} Barbarlar! Yabancı maç başlıyor!`;
+          } else {
+            roleDescription = `${role} Maç başlıyor!`;
+          }
+        } else {
+          roleDescription = `${role} Maç başlıyor!`;
+        }
+      } else {
+        roleDescription = '🚨 Maç başlıyor!';
+      }
+      
+      const embed = new EmbedBuilder()
+        .setColor('#00ff00')
+        .setTitle('🏟️ MAÇ ODASI HAZIR!')
+        .setDescription(`**${match.homeTeam.name} vs ${match.awayTeam.name}**`)
+        .addFields(
+          { name: '📅 Maç Tarihi', value: matchTime, inline: true },
+          { name: '🏟️ Lig', value: match.league || 'Bilinmiyor', inline: true },
+          { name: '📺 Yayın', value: match.broadcastChannel || 'Bilinmiyor', inline: true },
+          { name: '🔔 Bildirim', value: roleDescription, inline: false }
+        )
+        .setThumbnail(match.homeTeam.logo || '')
+        .setImage(match.awayTeam.logo || '')
+        .setFooter({ 
+          text: highlightedTeam ? `${highlightedTeam} takımını destekleyin!` : 'Odaya katılarak maçı canlı takip edebilirsiniz!' 
+        })
+        .setTimestamp();
+
+      return embed;
+    } catch (error) {
+      console.error('Error creating voice room notification:', error);
+      return this.createErrorEmbed('Sesli oda bildirimi oluşturulurken hata oluştu');
+    }
+  }
+
+  private async createEventDescription(match: Match): Promise<string> {
+    const matchTime = format(new Date(match.date), 'dd.MM.yyyy HH:mm');
+    
+    try {
+      const odds = await this.openrouter.getMatchOdds(match.homeTeam.name, match.awayTeam.name);
+      const role = await this.getRoleForMatch(match);
+      
+      return `🏟️ **${match.league}**
+
+⚽ **Maç**: ${match.homeTeam.name} vs ${match.awayTeam.name}
+📅 **Tarih**: ${matchTime}
+📺 **Yayın**: ${match.broadcastChannel || 'Bilinmiyor'}
+🎲 **Kazanma Oranları**:
+   🔴 ${match.homeTeam.name}: ${odds.homeWin}%
+   🔵 ${match.awayTeam.name}: ${odds.awayWin}%
+   🤝 Beraberlik: ${odds.draw}%
+
+🔔 **Bildirim**: ${role || '🚨'} Maç başlıyor!
+
+Odaya katılarak maçı canlı takip edebilirsiniz!`;
+    } catch (error) {
+      console.error('Error creating event description:', error);
+      return `🏟️ **${match.league}**
+
+⚽ **Maç**: ${match.homeTeam.name} vs ${match.awayTeam.name}
+📅 **Tarih**: ${matchTime}
+📺 **Yayın**: ${match.broadcastChannel || 'Bilinmiyor'}
+
+🔔 **Bildirim**: Maç başlıyor!
+
+Odaya katılarak maçı canlı takip edebilirsiniz!`;
+    }
+  }
+
+  private async createGuildEvent(match: Match, channel: VoiceChannel): Promise<GuildScheduledEvent> {
+    const guild = channel.guild;
+    
+    const event = await guild.scheduledEvents.create({
+      name: `${match.homeTeam.name} - ${match.awayTeam.name}`,
+      privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
+      entityType: GuildScheduledEventEntityType.Voice,
+      entityMetadata: { location: channel.id },
+      scheduledStartTime: new Date(match.date),
+      description: await this.createEventDescription(match),
+    });
+
+    // Veritabanına event_id'yi kaydet
+    await this.supabase.updateMatchWithEventId(match.id, event.id);
+    
+    // events tablosuna kaydet
+    await this.supabase.createEvent(match.id, event.id);
+    
+    return event;
+  }
+
+  private async createGuildEventWithRetry(match: Match, channel: VoiceChannel, maxRetries = 3): Promise<GuildScheduledEvent | null> {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await this.createGuildEvent(match, channel);
+      } catch (error) {
+        console.error(`Etkinlik oluşturulamadı (deneme ${i + 1}/${maxRetries}):`, error);
+        if (i === maxRetries - 1) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
+      }
+    }
+    return null;
+  }
+
 
   async start() {
     this.login(config.discord.botToken);
