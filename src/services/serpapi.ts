@@ -2,12 +2,13 @@ import axios from 'axios';
 import { config } from '../utils/config';
 import { Match, Team, LeagueConfig } from '../types';
 import { addDays } from 'date-fns';
+import { CACHE_TIMEOUTS, DEFAULTS } from '../utils/constants';
 
 export class SerpApiService {
   private apiKey: string;
   private baseUrl: string = 'https://serpapi.com/search.json';
   private teamCache = new Map<string, Team>();
-  private cacheTimeout = 48 * 60 * 60 * 1000; // 48 saat (uzatıldı)
+  private cacheTimeout = CACHE_TIMEOUTS.TEAM_SEARCH;
   private requestQueue = new Map<string, Promise<Team | null>>();
 
   constructor() {
@@ -29,23 +30,16 @@ export class SerpApiService {
       const response = await axios.get(this.baseUrl, { params });
       const matches: Match[] = [];
 
-      console.log(`🔍 SerpApi response for ${leagueConfig.name}:`, JSON.stringify(response.data, null, 2));
-
       // Check for sports_results in the response
       if (response.data.sports_results && response.data.sports_results.games) {
-        console.log(`📋 Found ${response.data.sports_results.games.length} games in sports_results.games`);
         for (const game of response.data.sports_results.games) {
           // Parse the date from the game
           const gameDate = this.parseGameDate(game.date);
-          console.log(`📅 Parsing date: "${game.date}" -> ${gameDate ? gameDate.toISOString() : 'null'}`);
           if (gameDate && gameDate >= today && gameDate <= nextWeek) {
             const match = this.parseGame(game, leagueConfig.name);
             if (match) {
               matches.push(match);
-              console.log(`✅ Added match: ${match.homeTeam.name} vs ${match.awayTeam.name} at ${match.date}`);
             }
-          } else {
-            console.log(`❌ Match filtered out: ${game.teams?.[0]?.name} vs ${game.teams?.[1]?.name} - Date: ${gameDate ? gameDate.toISOString() : 'null'} - Range: ${today.toISOString()} to ${nextWeek.toISOString()}`);
           }
         }
       }
@@ -331,7 +325,7 @@ export class SerpApiService {
       if (!gameDate) return null;
       
       // Use default time if not specified
-      let time = '20:00';
+      let time = DEFAULTS.MATCH_TIME;
       
       // Format date
       const formattedDate = `${gameDate.getFullYear()}-${String(gameDate.getMonth() + 1).padStart(2, '0')}-${String(gameDate.getDate()).padStart(2, '0')}T${time}:00+03:00`;
@@ -377,7 +371,7 @@ export class SerpApiService {
       if (!gameDate) return null;
 
       // Add time if available, otherwise use default
-      let time = game.time || '20:00'; // Default time if not specified
+      let time = game.time || DEFAULTS.MATCH_TIME; // Default time if not specified
       
       // Convert 12-hour format to 24-hour format
       if (time.includes('PM') || time.includes('pm')) {

@@ -33,10 +33,8 @@ class FixtureSyncService {
     try {
       // Queue ile paralel senkronizasyon
       const syncPromises = teamConfigs.map(async (team) => {
-        console.log(`🔄 Syncing fixtures for ${team.name}...`);
         try {
           await this.syncLeagueFixtures(team);
-          console.log(`✅ Successfully synced fixtures for ${team.name}`);
         } catch (error) {
           console.error(`❌ Error syncing fixtures for ${team.name}:`, error);
           throw error;
@@ -57,7 +55,6 @@ class FixtureSyncService {
     try {
       // Fetch fixtures from SerpApi
       const matches = await this.serpapi.fetchFixtures(league);
-      console.log(`Found ${matches.length} matches for ${league.name}`);
 
       for (const match of matches) {
         // Check if teams exist in database, create if not

@@ -1,11 +1,12 @@
 import OpenAI from 'openai';
 import { config } from '../utils/config';
 import { OddsResponse } from '../types';
+import { CACHE_TIMEOUTS, DEFAULTS } from '../utils/constants';
 
 export class OpenRouterService {
   private openai: OpenAI;
   private oddsCache = new Map<string, { odds: OddsResponse; timestamp: number }>();
-  private cacheTimeout = 60 * 60 * 1000; // 1 saat (uzatıldı)
+  private cacheTimeout = CACHE_TIMEOUTS.ODDS;
   private requestQueue = new Map<string, Promise<OddsResponse>>();
 
   constructor() {
@@ -103,9 +104,9 @@ Please provide realistic percentages that add up to 100. Base your analysis on g
       console.error('Error getting match odds from OpenRouter:', error);
       // Return default odds if API fails
       return {
-        homeWin: 33,
-        awayWin: 33,
-        draw: 34,
+        homeWin: DEFAULTS.HOME_WIN_ODDS,
+        awayWin: DEFAULTS.AWAY_WIN_ODDS,
+        draw: DEFAULTS.DRAW_ODDS,
       };
     }
   }

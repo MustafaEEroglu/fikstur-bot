@@ -1,13 +1,14 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { config } from '../utils/config';
 import { Match, Team, DiscordRole } from '../types';
+import { CACHE_TIMEOUTS, DEFAULTS } from '../utils/constants';
 
 export class SupabaseService {
   private client: SupabaseClient;
   private rolesCache: { data: DiscordRole[]; timestamp: number } | null = null;
-  private rolesCacheTimeout = 10 * 60 * 1000; // 10 dakika (uzatıldı)
+  private rolesCacheTimeout = CACHE_TIMEOUTS.ROLES;
   private matchesCache = new Map<string, { matches: Match[]; timestamp: number }>();
-  private matchesCacheTimeout = 2 * 60 * 1000; // 2 dakika
+  private matchesCacheTimeout = CACHE_TIMEOUTS.MATCHES;
 
   constructor() {
     this.client = createClient(config.supabase.url, config.supabase.anonKey);
@@ -150,7 +151,7 @@ export class SupabaseService {
       .eq('status', 'scheduled')
       .eq('voice_room_created', false)
       .order('date', { ascending: true })
-      .limit(20); // Limit to prevent large data sets
+      .limit(DEFAULTS.LIMIT_MATCHES); // Limit to prevent large data sets
 
     if (error) throw new Error(`Error fetching matches for voice room: ${error.message}`);
     
@@ -220,16 +221,6 @@ export class SupabaseService {
     if (error) throw new Error(`Error updating match with event ID: ${error.message}`);
   }
 
-  async getMatchesByEventId(eventId: string): Promise<Match[]> {
-    const { data, error } = await this.client
-      .from('matches')
-      .select('*')
-      .eq('event_id', eventId);
-
-    if (error) throw new Error(`Error fetching matches by event ID: ${error.message}`);
-    return data || [];
-  }
-
   async createEvent(matchId: number, discordEventId: string): Promise<any> {
     const { data, error } = await this.adminClient
       .from('events')
@@ -244,23 +235,7 @@ export class SupabaseService {
     return data;
   }
 
-  async updateEvent(eventId: number, updates: Partial<any>): Promise<void> {
-    const { error } = await this.adminClient
-      .from('events')
-      .update(updates)
-      .eq('id', eventId);
 
-    if (error) throw new Error(`Error updating event: ${error.message}`);
-  }
-
-  async deleteEventByDiscordId(discordEventId: string): Promise<void> {
-    const { error } = await this.adminClient
-      .from('events')
-      .delete()
-      .eq('discord_event_id', discordEventId);
-
-    if (error) throw new Error(`Error deleting event: ${error.message}`);
-  }
 
   // Role operations
   async getRoles(): Promise<DiscordRole[]> {
@@ -288,17 +263,6 @@ export class SupabaseService {
     };
     
     return mappedData;
-  }
-
-  async getRoleByTeamName(teamName: string): Promise<DiscordRole | null> {
-    const { data, error } = await this.client
-      .from('roles')
-      .select('*')
-      .or(`name.ilike.%${teamName}%,team_id.in.(select id from teams where name.ilike.%${teamName}%)`)
-      .limit(1); // Limit to single result for better performance
-
-    if (error && error.code !== 'PGRST116') throw new Error(`Error fetching role: ${error.message}`);
-    return data?.[0] || null;
   }
 
   async getBarbarRole(): Promise<DiscordRole | null> {

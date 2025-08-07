@@ -1,5 +1,6 @@
-import { SlashCommandBuilder, EmbedBuilder, ChannelType } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ChannelType, ChatInputCommandInteraction } from 'discord.js';
 import { SupabaseService } from './services/supabase';
+import { INTERVALS } from './utils/constants';
 
 export const testCommands = [
   new SlashCommandBuilder()
@@ -23,16 +24,14 @@ export const testCommands = [
     .toJSON(),
 ];
 
-export async function handleTestCommand(interaction: any, supabase: SupabaseService) {
+export async function handleTestCommand(interaction: ChatInputCommandInteraction, supabase: SupabaseService) {
   const command = interaction.commandName;
   
   try {
-    console.log(`🧪 Test komutu tetiklendi: ${command} - Kullanıcı: ${interaction.user.tag}`);
     await interaction.deferReply();
     
     switch (command) {
       case 'test-notification':
-        console.log('🧪 Test bildirimi gönderiliyor...');
         // Test bildirimi gönder
         const testMatch = {
           id: 999,
@@ -61,7 +60,6 @@ export async function handleTestCommand(interaction: any, supabase: SupabaseServ
           content: '🧪 **TEST BİLDİRİMİ**',
           embeds: [embed] 
         });
-        console.log('✅ Test bildirimi gönderildi');
         break;
         
       case 'test-voice-room':
@@ -122,7 +120,7 @@ export async function handleTestCommand(interaction: any, supabase: SupabaseServ
           } catch (error) {
             console.log('⚠️ Test sesli oda zaten silinmiş veya silinirken hata oluştu:', error);
           }
-        }, 5 * 60 * 1000);
+        }, INTERVALS.TEST_ROOM_CLEANUP);
         
         await interaction.editReply(`🧪 Test sesli oda oluşturuldu: ${voiceChannel}`);
         console.log('✅ Test komutu başarıyla tamamlandı');

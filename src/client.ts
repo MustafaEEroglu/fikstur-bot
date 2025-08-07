@@ -5,6 +5,7 @@ import { OpenRouterService } from './services/openrouter';
 import { Match } from './types';
 import { format } from 'date-fns';
 import { testCommands, handleTestCommand } from './testCommands';
+import { INTERVALS, TURKISH_TEAMS, ERROR_MESSAGES } from './utils/constants';
 
 // Yardımcı fonksiyonlar
 function getEntityTypeString(entityType: GuildScheduledEventEntityType): string {
@@ -57,7 +58,6 @@ export class DiscordClient extends Client {
     (async () => {
       try {
         console.log('Started refreshing application (/) commands.');
-        console.log('📋 Komutlar:', commands.map(c => c.name).join(', '));
         await rest.put(
           Routes.applicationGuildCommands(config.discord.clientId, config.discord.guildId),
           { body: commands }
@@ -79,7 +79,6 @@ export class DiscordClient extends Client {
       if (!interaction.isChatInputCommand()) return;
 
       const command = interaction.commandName;
-      console.log(`🔔 Komut tetiklendi: ${command} - Kullanıcı: ${interaction.user.tag}`);
       
       if (command === 'hafta') {
         await this.handleWeekCommand(interaction);
@@ -96,7 +95,7 @@ export class DiscordClient extends Client {
         this.checkForMatches(),
         this.checkForVoiceRooms()
       ]);
-    }, 3 * 60 * 1000);
+    }, INTERVALS.MATCH_CHECK);
 
     // Initial check
     (async () => {
@@ -115,7 +114,7 @@ export class DiscordClient extends Client {
       
       const channel = this.channels.cache.get(config.discord.fixtureChannelId) as any;
       if (!channel) {
-        console.error('❌ Fixture channel not found');
+        console.error(ERROR_MESSAGES.CHANNEL_NOT_FOUND);
         return;
       }
 
@@ -165,13 +164,9 @@ export class DiscordClient extends Client {
       // Create new voice room if none exists
       const guild = this.guilds.cache.get(config.discord.guildId);
       if (!guild) {
-        console.log('❌ Sunucu bulunamadı, sesli oda oluşturulamadı');
+        console.error(ERROR_MESSAGES.GUILD_NOT_FOUND);
         return;
       }
-
-      console.log(`🏗️ Sesli oda oluşturma başlatılıyor...`);
-      console.log(`📊 Toplam maç sayısı: ${matches.length}`);
-      console.log(`🎯 İlk maç: ${matches[0].homeTeam.name} vs ${matches[0].awayTeam.name}`);
 
       // Create informative channel name with team abbreviations
       const firstMatch = matches[0];
@@ -180,46 +175,30 @@ export class DiscordClient extends Client {
       const leagueName = firstMatch.league.replace(/[^a-zA-Z0-9şğüıöçŞĞÜİÖÇ\s]/g, '').substring(0, 15);
       
       const channelName = `🏟️ ${homeTeamAbbr} vs ${awayTeamAbbr} | ${leagueName}`;
-      console.log(`🏷️ Oluşturulacak kanal adı: ${channelName}`);
       
       // Get the highest position among voice channels to place new channel at the top
       const voiceChannels = guild.channels.cache.filter(c => c.type === ChannelType.GuildVoice);
       const highestPosition = voiceChannels.size > 0 ? 
         Math.max(...voiceChannels.map(c => c.position)) + 1 : 0;
-      console.log(`📏 Sesli kanal pozisyonu: ${highestPosition}, Toplam mevcut sesli kanal: ${voiceChannels.size}`);
 
-      console.log(`🚀 Kanal oluşturma işlemi başlatılıyor...`);
       const channel = await guild.channels.create({
         name: channelName,
         type: ChannelType.GuildVoice,
         reason: 'Match starting soon',
         position: highestPosition, // Place at the top
       });
-      console.log(`✅ Sesli kanal başarıyla oluşturuldu: ${channel.name} (ID: ${channel.id})`);
 
       this.voiceChannels.add(channel.id);
-      console.log(`📝 Sesli kanal ID'si takip listesine eklendi: ${channel.id}`);
 
       // Sadece bir bildirim gönder
-      console.log(`📢 Sesli kanala bildirim gönderiliyor...`);
       const embed = await this.createVoiceRoomNotification(firstMatch);
       await channel.send({ embeds: [embed] });
-      console.log(`✅ Bildirim başarıyla gönderildi`);
 
       // Create Discord scheduled event for the voice channel
-      console.log(`🎭 Discord etkinliği oluşturma işlemi başlatılıyor...`);
-      console.log(`📍 Event lokasyonu (kanal ID): ${channel.id}`);
-      console.log(`⏰ Event başlangıç zamanı: ${firstMatch.date}`);
-      
       try {
         const event = await this.createGuildEventWithRetry(firstMatch, channel);
         if (event) {
-          console.log(`✅ Discord etkinliği başarıyla oluşturuldu: ${firstMatch.homeTeam.name} vs ${firstMatch.awayTeam.name}`);
-          console.log(`🎯 Event ID: ${event.id}`);
-          console.log(`📅 Event adı: ${event.name}`);
-          console.log(`🔗 Event URL: ${event.url || 'Mevcut değil'}`);
-        } else {
-          console.log(`⚠️ Event oluşturulamadı (max retries aşıldı)`);
+          console.log(`✅ Discord etkinliği oluşturuldu: ${firstMatch.homeTeam.name} vs ${firstMatch.awayTeam.name}`);
         }
       } catch (error) {
         console.error('❌ Discord etkinliği oluşturulamadı:', error);
@@ -302,12 +281,12 @@ export class DiscordClient extends Client {
     // Check if teams exist before accessing their properties
     if (!match.homeTeam || !match.homeTeam.name) {
       console.error('Home team data is missing or invalid:', match.homeTeam);
-      return this.createErrorEmbed('Ev takım bilgisi eksik');
+      return this.createErrorEmbed(ERROR_MESSAGES.MISSING_HOME_TEAM);
     }
     
     if (!match.awayTeam || !match.awayTeam.name) {
       console.error('Away team data is missing or invalid:', match.awayTeam);
-      return this.createErrorEmbed('Deplasman takım bilgisi eksik');
+      return this.createErrorEmbed(ERROR_MESSAGES.MISSING_AWAY_TEAM);
     }
 
     try {
@@ -335,7 +314,7 @@ export class DiscordClient extends Client {
       return embed;
     } catch (error) {
       console.error('Error creating match embed:', error);
-      return this.createErrorEmbed('Maç bilgisi oluşturulurken hata oluştu');
+      return this.createErrorEmbed(ERROR_MESSAGES.MATCH_EMBED_ERROR);
     }
   }
 
@@ -384,11 +363,10 @@ export class DiscordClient extends Client {
   }
 
   private hasTurkishTeam(match: Match): boolean {
-    const turkishTeams = ['galatasaray', 'fenerbahçe', 'beşiktaş'];
     const homeTeamLower = match.homeTeam.name.toLowerCase();
     const awayTeamLower = match.awayTeam.name.toLowerCase();
     
-    return turkishTeams.some(team => 
+    return TURKISH_TEAMS.some(team => 
       homeTeamLower.includes(team) || awayTeamLower.includes(team)
     );
   }
@@ -397,12 +375,12 @@ export class DiscordClient extends Client {
     // Check if teams exist before accessing their properties
     if (!match.homeTeam || !match.homeTeam.name) {
       console.error('Home team data is missing or invalid:', match.homeTeam);
-      return this.createErrorEmbed('Ev takım bilgisi eksik');
+      return this.createErrorEmbed(ERROR_MESSAGES.MISSING_HOME_TEAM);
     }
     
     if (!match.awayTeam || !match.awayTeam.name) {
       console.error('Away team data is missing or invalid:', match.awayTeam);
-      return this.createErrorEmbed('Deplasman takım bilgisi eksik');
+      return this.createErrorEmbed(ERROR_MESSAGES.MISSING_AWAY_TEAM);
     }
 
     try {
@@ -462,7 +440,7 @@ export class DiscordClient extends Client {
       return embed;
     } catch (error) {
       console.error('Error creating voice room notification:', error);
-      return this.createErrorEmbed('Sesli oda bildirimi oluşturulurken hata oluştu');
+      return this.createErrorEmbed(ERROR_MESSAGES.VOICE_ROOM_ERROR);
     }
   }
 
