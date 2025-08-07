@@ -1,10 +1,19 @@
 {
-  "functions": {
-    "src/index.ts": {
-      "runtime": "nodejs18.x"
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/index.ts",
+      "use": "@vercel/node"
     },
-    "src/api/syncFixtures.ts": {
-      "runtime": "nodejs18.x"
+    {
+      "src": "src/api/syncFixtures.ts",
+      "use": "@vercel/node"
     }
-  }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/src/index.ts"
+    }
+  ]
 }
