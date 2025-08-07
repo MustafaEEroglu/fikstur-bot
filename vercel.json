@@ -1,15 +1,10 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "src/api/syncFixtures.ts",
-      "use": "@vercel/node"
+  "functions": {
+    "src/index.ts": {
+      "runtime": "nodejs18.x"
+    },
+    "src/api/syncFixtures.ts": {
+      "runtime": "nodejs18.x"
     }
-  ],
-  "routes": [
-    {
-      "src": "/api/syncFixtures",
-      "dest": "/api/syncFixtures"
-    }
-  ]
+  }
 }
