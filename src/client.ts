@@ -353,17 +353,30 @@ export class DiscordClient extends Client {
   private async getRoleForMatch(match: Match): Promise<string> {
     const roles = await this.supabase.getRoles();
     
-    // Check for home team role
+    // Check for home team role - exact match first
     const homeRole = roles.find(r => 
-      r.teamId && match.homeTeam.name.toLowerCase().includes(r.name.toLowerCase())
+      r.name.toLowerCase() === match.homeTeam.name.toLowerCase()
     );
     if (homeRole) return `<@&${homeRole.id}>`;
 
-    // Check for away team role
+    // Check for away team role - exact match first
     const awayRole = roles.find(r => 
-      r.teamId && match.awayTeam.name.toLowerCase().includes(r.name.toLowerCase())
+      r.name.toLowerCase() === match.awayTeam.name.toLowerCase()
     );
     if (awayRole) return `<@&${awayRole.id}>`;
+
+    // Check for partial matches (contains)
+    const homePartialRole = roles.find(r => 
+      r.name.toLowerCase().includes(match.homeTeam.name.toLowerCase()) ||
+      match.homeTeam.name.toLowerCase().includes(r.name.toLowerCase())
+    );
+    if (homePartialRole) return `<@&${homePartialRole.id}>`;
+
+    const awayPartialRole = roles.find(r => 
+      r.name.toLowerCase().includes(match.awayTeam.name.toLowerCase()) ||
+      match.awayTeam.name.toLowerCase().includes(r.name.toLowerCase())
+    );
+    if (awayPartialRole) return `<@&${awayPartialRole.id}>`;
 
     // Check if match has Turkish teams (GS, FB, BJK)
     const hasTurkishTeam = this.hasTurkishTeam(match);
@@ -412,7 +425,7 @@ export class DiscordClient extends Client {
         // Extract team name from role
         const roleName = role.replace(/<@&|>/g, '');
         const roles = await this.supabase.getRoles();
-        const roleInfo = roles.find(r => r.id === roleName);
+        const roleInfo = roles.find(r => r.id.toString() === roleName);
         
         if (roleInfo) {
           if (roleInfo.name.toLowerCase().includes('galatasaray')) {

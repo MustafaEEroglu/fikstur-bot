@@ -222,7 +222,7 @@ export class SupabaseService {
     // Fetch from database if not in cache or cache expired
     const { data, error } = await this.client
       .from('roles')
-      .select('id, name, team_id'); // Use team_id instead of teamId
+      .select('id, name, team_id');
 
     if (error) throw new Error(`Roller alınamadı: ${error.message}`);
     
@@ -245,7 +245,7 @@ export class SupabaseService {
       .from('roles')
       .select('*')
       .or(`name.ilike.%${teamName}%,team_id.in.(select id from teams where name.ilike.%${teamName}%)`)
-      .limit(1); // Limit to single result for better performance
+      .limit(1);
 
     if (error && error.code !== 'PGRST116') throw new Error(`Rol bilgisi alınamadı: ${error.message}`);
     return data?.[0] || null;

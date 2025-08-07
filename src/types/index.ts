@@ -24,7 +24,7 @@ export interface Match {
 }
 
 export interface DiscordRole {
-  id: string;
+  id: number;
   name: string;
   teamId: number | null; // null for 'barbarlar' role
 }

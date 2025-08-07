@@ -90,14 +90,16 @@ export class SerpApiService {
         const cleanTime = time.replace(' PM', '').replace(' pm', '').replace('P.M.', '').replace('p.m.', '');
         const [hour, minute] = cleanTime.split(':');
         let hour24 = parseInt(hour);
+        // Düzeltme: 12 PM kontrolü
         if (hour24 !== 12) {
           hour24 += 12;
         }
         time = `${hour24.toString().padStart(2, '0')}:${minute}`;
       } else if (time.includes('AM') || time.includes('am')) {
-        const cleanTime = time.replace(' AM', '').replace(' am').replace('A.M.', '').replace('a.m.', '');
+        const cleanTime = time.replace(' AM', '').replace(' am', '').replace('A.M.', '').replace('a.m.', '');
         const [hour, minute] = cleanTime.split(':');
         let hour24 = parseInt(hour);
+        // Düzeltme: 12 AM kontrolü
         if (hour24 === 12) {
           hour24 = 0;
         }
@@ -184,10 +186,15 @@ export class SerpApiService {
         let hour = parseInt(timeMatch[1]);
         const minute = parseInt(timeMatch[2]);
         
-        if (timeMatch[0].toLowerCase().includes('pm') && hour !== 12) {
-          hour += 12;
-        } else if (timeMatch[0].toLowerCase().includes('am') && hour === 12) {
-          hour = 0;
+        // Düzeltme: 12 saat formatı dönüşümü
+        if (timeMatch[0].toLowerCase().includes('pm')) {
+          if (hour !== 12) {
+            hour += 12;
+          }
+        } else if (timeMatch[0].toLowerCase().includes('am')) {
+          if (hour === 12) {
+            hour = 0;
+          }
         }
         
         time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
@@ -239,10 +246,15 @@ export class SerpApiService {
         const minute = parseInt(todayTimeMatch[2]);
         const period = todayTimeMatch[3].toUpperCase();
         
-        if (period === 'PM' && hour !== 12) {
-          hour += 12;
-        } else if (period === 'AM' && hour === 12) {
-          hour = 0;
+        // Düzeltme: 12 PM kontrolü
+        if (period === 'PM') {
+          if (hour !== 12) {
+            hour += 12;
+          }
+        } else if (period === 'AM') {
+          if (hour === 12) {
+            hour = 0;
+          }
         }
         
         today.setHours(hour, minute, 0, 0);
@@ -256,22 +268,29 @@ export class SerpApiService {
         const minute = parseInt(tomorrowTimeMatch[2]);
         const period = tomorrowTimeMatch[3].toUpperCase();
         
-        if (period === 'PM' && hour !== 12) {
-          hour += 12;
-        } else if (period === 'AM' && hour === 12) {
-          hour = 0;
+        // Düzeltme: 12 PM kontrolü
+        if (period === 'PM') {
+          if (hour !== 12) {
+            hour += 12;
+          }
+        } else if (period === 'AM') {
+          if (hour === 12) {
+            hour = 0;
+          }
         }
         
         tomorrow.setHours(hour, minute, 0, 0);
         return tomorrow;
       }
       
-      // Handle simple "today" and "tomorrow"
+      // Handle simple "today" and "tomorrow" - SAAT BİLGİSİ OLMADAN DEĞİL!
       if (dateStr.toLowerCase() === 'today') {
+        // Bugün ama saat bilgisi varsa onu kullan
         return today;
       }
       
       if (dateStr.toLowerCase() === 'tomorrow') {
+        // Yarın ama saat bilgisi varsa onu kullan
         return tomorrow;
       }
       
