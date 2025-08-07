@@ -123,6 +123,9 @@ class FixtureSyncService {
   }
 }
 
+// Export class for use in API
+export { FixtureSyncService };
+
 // Export for use as Vercel serverless function
 export default async function handler(_req: any, res: any) {
   try {
@@ -148,4 +151,3 @@ if (require.main === module) {
       process.exit(1);
     });
 }
-export { FixtureSyncService };
