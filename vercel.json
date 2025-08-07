@@ -12,6 +12,10 @@
   ],
   "routes": [
     {
+      "src": "/api/syncFixtures",
+      "dest": "/src/api/syncFixtures.ts"
+    },
+    {
       "src": "/(.*)",
       "dest": "/src/index.ts"
     }
