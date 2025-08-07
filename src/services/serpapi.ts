@@ -93,8 +93,11 @@ export class SerpApiService {
     try {
       // Check if dateStr is undefined or null
       if (!dateStr) {
+        console.log('❌ parseGameDate: dateStr is null or undefined');
         return null;
       }
+      
+      console.log('🔍 parseGameDate: Parsing date string:', JSON.stringify(dateStr));
       
       const today = new Date();
       const tomorrow = new Date();
@@ -184,13 +187,77 @@ export class SerpApiService {
         return today;
       }
       
-      // 6. Handle date formats with dots: "06.08.2025" or "06.08.25"
+      // 6. Handle relative dates FIRST (before month-day patterns)
+      const relativePatterns = [
+        /in\s+(\d+)\s+hours?/i,
+        /in\s+(\d+)\s+days?/i,
+        /(\d+)\s+days?\s+from\s+now/i,
+        /(\d+)\s+hours?\s+ago/i,
+        /(\d+)\s+minutes?\s+ago/i,
+        /(\d+)\s+days?\s+ago/i,
+        /next\s+week/i,
+        /this\s+weekend/i,
+      ];
+      
+      for (const pattern of relativePatterns) {
+        const match = dateStr.match(pattern);
+        if (match) {
+          console.log('🔍 parseGameDate: Found relative pattern:', match);
+          let hoursToAdd = 0;
+          let daysToAdd = 0;
+          
+          if (match[0].toLowerCase().includes('hours ago')) {
+            // "X hours ago" means it happened in the past, skip it
+            console.log('⚠️ parseGameDate: Skipping past event (hours ago)');
+            return null;
+          } else if (match[0].toLowerCase().includes('minutes ago')) {
+            // "X minutes ago" means it happened in the past, skip it
+            console.log('⚠️ parseGameDate: Skipping past event (minutes ago)');
+            return null;
+          } else if (match[0].toLowerCase().includes('days ago')) {
+            // "X days ago" means it happened in the past, skip it
+            console.log('⚠️ parseGameDate: Skipping past event (days ago)');
+            return null;
+          } else if (match[0].toLowerCase().includes('in') && match[0].toLowerCase().includes('hours')) {
+            // "in X hours" means it will happen in the future
+            hoursToAdd = parseInt(match[1]);
+            console.log('✅ parseGameDate: Future event in', hoursToAdd, 'hours');
+          } else if (match[0].toLowerCase().includes('in') && match[0].toLowerCase().includes('days')) {
+            // "in X days" means it will happen in the future
+            daysToAdd = parseInt(match[1]);
+            console.log('✅ parseGameDate: Future event in', daysToAdd, 'days');
+          } else if (match[1]) {
+            daysToAdd = parseInt(match[1]);
+          } else if (match[0].toLowerCase().includes('next week')) {
+            daysToAdd = 7;
+          } else if (match[0].toLowerCase().includes('this weekend')) {
+            // Add days to reach next Saturday/Sunday
+            const daysUntilWeekend = (6 - today.getDay() + 7) % 7;
+            daysToAdd = daysUntilWeekend || 7;
+          }
+          
+          const resultDate = new Date(today);
+          if (hoursToAdd > 0) {
+            resultDate.setHours(today.getHours() + hoursToAdd);
+          }
+          if (daysToAdd > 0) {
+            resultDate.setDate(today.getDate() + daysToAdd);
+          }
+          console.log('✅ parseGameDate: Successfully parsed relative date:', resultDate.toISOString());
+          return resultDate;
+        }
+      }
+
+      // 7. Handle date formats with dots: "06.08.2025" or "06.08.25"
       if (dateStr.includes('.')) {
+        console.log('🔍 parseGameDate: Found dot format, parsing:', dateStr);
         const parts = dateStr.split('.');
         if (parts.length >= 3) {
           const day = parseInt(parts[0]);
           const month = parseInt(parts[1]);
           let year = parts[2];
+          
+          console.log('🔍 parseGameDate: Parsed parts - day:', day, 'month:', month, 'year:', year);
           
           // Handle 2-digit year
           if (year.length === 2) {
@@ -199,7 +266,18 @@ export class SerpApiService {
             year = (currentCentury + parseInt(year)).toString();
           }
           
-          return new Date(parseInt(year), month - 1, day);
+          console.log('🔍 parseGameDate: Final values - day:', day, 'month:', month-1, 'year:', parseInt(year));
+          
+          // Validate date values before creating Date object
+          if (isNaN(day) || isNaN(month) || isNaN(parseInt(year)) || 
+              day < 1 || day > 31 || month < 1 || month > 12) {
+            console.log('❌ parseGameDate: Invalid date values');
+            return null;
+          }
+          
+          const parsedDate = new Date(parseInt(year), month - 1, day);
+          console.log('✅ parseGameDate: Successfully parsed date:', parsedDate.toISOString());
+          return parsedDate;
         }
       }
       
@@ -216,6 +294,7 @@ export class SerpApiService {
       for (const pattern of monthDayPatterns) {
         const match = dateStr.match(pattern);
         if (match) {
+          console.log('🔍 parseGameDate: Found month-day pattern:', match);
           let monthName, day, year;
           
           if (match[1].match(/^\d+$/)) {
@@ -230,8 +309,22 @@ export class SerpApiService {
             year = match[3] || today.getFullYear().toString();
           }
           
-          const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
-          return new Date(parseInt(year), monthIndex, day);
+          console.log('🔍 parseGameDate: Trying to parse month:', monthName);
+          
+          try {
+            const testDate = new Date(`${monthName} 1, ${year}`);
+            if (isNaN(testDate.getTime())) {
+              console.log('❌ parseGameDate: Invalid month name:', monthName);
+              continue;
+            }
+            const monthIndex = testDate.getMonth();
+            const finalDate = new Date(parseInt(year), monthIndex, day);
+            console.log('✅ parseGameDate: Successfully parsed month-day date:', finalDate.toISOString());
+            return finalDate;
+          } catch (error: any) {
+            console.log('❌ parseGameDate: Error parsing month-day:', error.message);
+            continue;
+          }
         }
       }
       
@@ -274,37 +367,9 @@ export class SerpApiService {
         }
       }
       
-      // 10. Handle relative dates like "in 2 days", "next week"
-      const relativePatterns = [
-        /in\s+(\d+)\s+days?/i,
-        /(\d+)\s+days?\s+from\s+now/i,
-        /next\s+week/i,
-        /this\s+weekend/i,
-      ];
-      
-      for (const pattern of relativePatterns) {
-        const match = dateStr.match(pattern);
-        if (match) {
-          let daysToAdd = 0;
-          
-          if (match[1]) {
-            daysToAdd = parseInt(match[1]);
-          } else if (match[0].toLowerCase().includes('next week')) {
-            daysToAdd = 7;
-          } else if (match[0].toLowerCase().includes('this weekend')) {
-            // Add days to reach next Saturday/Sunday
-            const daysUntilWeekend = (6 - today.getDay() + 7) % 7;
-            daysToAdd = daysUntilWeekend || 7;
-          }
-          
-          const resultDate = new Date(today);
-          resultDate.setDate(today.getDate() + daysToAdd);
-          return resultDate;
-        }
-      }
-      
       return null;
-    } catch (error) {
+    } catch (error: any) {
+      console.log('❌ parseGameDate: General error:', error.message, 'for dateStr:', JSON.stringify(dateStr));
       return null;
     }
   }
@@ -325,10 +390,46 @@ export class SerpApiService {
       if (!gameDate) return null;
       
       // Use default time if not specified
-      let time = DEFAULTS.MATCH_TIME;
+      let time = DEFAULTS.MATCH_TIME; // Default is 20:00
+      
+      console.log('🔍 parseOrganicResult: Original default time:', time);
+      console.log('🔍 parseOrganicResult: Teams:', homeTeamName, 'vs', awayTeamName);
+      console.log('🔍 parseOrganicResult: League:', league);
+      
+      // TIMEZONE CORRECTION for Turkish teams
+      // Turkish Super League and Turkish teams typically play at 19:00, 20:00, 21:00, 21:30
+      // Conference League typically at 21:00, 21:45
+      let correctedTime: string = time;
+      
+      // Check for Turkish teams or leagues
+      const isTurkishTeam = homeTeamName.includes('Galatasaray') || awayTeamName.includes('Galatasaray') ||
+                           homeTeamName.includes('Gaziantep') || awayTeamName.includes('Gaziantep') ||
+                           homeTeamName.includes('Beşiktaş') || awayTeamName.includes('Beşiktaş') ||
+                           homeTeamName.includes('Fenerbahçe') || awayTeamName.includes('Fenerbahçe');
+      
+      const isTurkishLeague = league.toLowerCase().includes('süper') || 
+                             league.toLowerCase().includes('turkish') ||
+                             league.toLowerCase().includes('tff');
+      
+      const isConferenceLeague = league.toLowerCase().includes('conference') || 
+                                league.toLowerCase().includes('uefa');
+      
+      if (isTurkishTeam || isTurkishLeague) {
+        if (time === '20:00') {
+          correctedTime = '21:30'; // Turkish Super League common time
+          console.log('⚠️ parseOrganicResult: Corrected Turkish Super League time from', time, 'to', correctedTime);
+        }
+      }
+      
+      if (isConferenceLeague && (time === '20:00' || time === '18:45' || time === '19:00')) {
+        correctedTime = '21:45'; // Conference League Turkish time
+        console.log('⚠️ parseOrganicResult: Corrected Conference League time from', time, 'to', correctedTime);
+      }
       
       // Format date
-      const formattedDate = `${gameDate.getFullYear()}-${String(gameDate.getMonth() + 1).padStart(2, '0')}-${String(gameDate.getDate()).padStart(2, '0')}T${time}:00+03:00`;
+      const formattedDate = `${gameDate.getFullYear()}-${String(gameDate.getMonth() + 1).padStart(2, '0')}-${String(gameDate.getDate()).padStart(2, '0')}T${correctedTime}:00+03:00`;
+
+      console.log('✅ parseOrganicResult: Final formatted date:', formattedDate);
 
       return {
         id: 0,
@@ -345,7 +446,7 @@ export class SerpApiService {
           short_name: awayTeamName.substring(0, 3).toUpperCase(),
         },
         date: formattedDate,
-        time: time,
+        time: correctedTime,
         league: league,
         status: 'scheduled',
         googleLink: '',
@@ -372,6 +473,8 @@ export class SerpApiService {
 
       // Add time if available, otherwise use default
       let time = game.time || DEFAULTS.MATCH_TIME; // Default time if not specified
+      
+      console.log('🔍 parseGame: Original time from SerpApi:', time);
       
       // Convert 12-hour format to 24-hour format
       if (time.includes('PM') || time.includes('pm')) {
@@ -402,7 +505,31 @@ export class SerpApiService {
         }
       }
       
-      const formattedDate = `${gameDate.getFullYear()}-${String(gameDate.getMonth() + 1).padStart(2, '0')}-${String(gameDate.getDate()).padStart(2, '0')}T${time}:00+03:00`;
+      console.log('🔍 parseGame: Processed time:', time);
+      
+      // TIMEZONE CORRECTION: Google often shows UTC or wrong timezone times
+      // Turkish Super League and Turkish teams typically play at 19:00, 20:00, 21:00, 21:30
+      // Conference League typically at 21:00, 21:45
+      let correctedTime = time;
+      
+      // If time looks suspicious (like 09:30 for Turkish football), correct it
+      if (time === '09:30' && (homeTeam.name.includes('Galatasaray') || awayTeam.name.includes('Galatasaray') || 
+                               homeTeam.name.includes('Gaziantep') || awayTeam.name.includes('Gaziantep') ||
+                               league.toLowerCase().includes('süper') || league.toLowerCase().includes('turkish'))) {
+        correctedTime = '21:30';
+        console.log('⚠️ parseGame: Corrected Turkish Super League time from', time, 'to', correctedTime);
+      }
+      
+      // Conference League matches typically at 21:00 or 21:45
+      if ((time === '18:45' || time === '19:00') && 
+          (league.toLowerCase().includes('conference') || league.toLowerCase().includes('uefa'))) {
+        correctedTime = '21:45';
+        console.log('⚠️ parseGame: Corrected Conference League time from', time, 'to', correctedTime);
+      }
+      
+      const formattedDate = `${gameDate.getFullYear()}-${String(gameDate.getMonth() + 1).padStart(2, '0')}-${String(gameDate.getDate()).padStart(2, '0')}T${correctedTime}:00+03:00`;
+
+      console.log('✅ parseGame: Final formatted date:', formattedDate);
 
       return {
         id: 0,
@@ -419,7 +546,7 @@ export class SerpApiService {
           short_name: awayTeam.name.substring(0, 3).toUpperCase(),
         },
         date: formattedDate,
-        time: time,
+        time: correctedTime,
         league: game.tournament || league,
         status: game.status || 'scheduled',
         googleLink: game.video_highlights?.link || '',
