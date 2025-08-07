@@ -2,22 +2,27 @@
   "version": 2,
   "builds": [
     {
-      "src": "src/index.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/api/syncFixtures.ts",
-      "use": "@vercel/node"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
     }
   ],
   "routes": [
     {
-      "src": "/api/syncFixtures",
-      "dest": "/src/api/syncFixtures.ts"
+      "src": "/api/(.*)",
+      "dest": "src/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/src/index.ts"
+      "dest": "dist/$1"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/syncFixtures",
+      "schedule": "0 0 * * *"
     }
   ]
 }

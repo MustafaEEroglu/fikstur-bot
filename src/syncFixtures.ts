@@ -15,6 +15,8 @@ class FixtureSyncService {
   }
 
   async syncAllFixtures() {
+    console.log('Starting fixture synchronization...');
+    
     const teamConfigs: LeagueConfig[] = [
       { name: 'Galatasaray', teams: ['Galatasaray'], serpApiQuery: 'Galatasaray' },
       { name: 'Fenerbahçe', teams: ['Fenerbahçe'], serpApiQuery: 'Fenerbahçe' },
@@ -29,19 +31,24 @@ class FixtureSyncService {
     ];
 
     try {
-      // Paralel senkronizasyon
-      await Promise.all(teamConfigs.map(async (team) => {
+      // Queue ile paralel senkronizasyon
+      const syncPromises = teamConfigs.map(async (team) => {
+        console.log(`🔄 Syncing fixtures for ${team.name}...`);
         try {
           await this.syncLeagueFixtures(team);
+          console.log(`✅ Successfully synced fixtures for ${team.name}`);
         } catch (error) {
-          console.error(`❌ Senkronizasyon hatası: ${team.name} takımı için maçlar alınamadı. Hata:`, error);
+          console.error(`❌ Error syncing fixtures for ${team.name}:`, error);
           throw error;
         }
-      }));
+      });
       
-      console.log('✅ Tüm takımlar için senkronizasyon tamamlandı');
+      // Paralel olarak çalıştır
+      await Promise.all(syncPromises);
+      
+      console.log('🎉 Fixture synchronization completed successfully!');
     } catch (error) {
-      console.error('❌ Genel senkronizasyon hatası:', error);
+      console.error('❌ Error during fixture synchronization:', error);
       throw error;
     }
   }
@@ -50,6 +57,7 @@ class FixtureSyncService {
     try {
       // Fetch fixtures from SerpApi
       const matches = await this.serpapi.fetchFixtures(league);
+      console.log(`Found ${matches.length} matches for ${league.name}`);
 
       for (const match of matches) {
         // Check if teams exist in database, create if not
@@ -57,12 +65,7 @@ class FixtureSyncService {
         const awayTeam = await this.ensureTeam(match.awayTeam);
 
         // Get odds for the match
-        let odds;
-        try {
-          odds = await this.openrouter.getMatchOdds(homeTeam.name, awayTeam.name);
-        } catch (oddsError) {
-          // Odds fetching is optional, continue without it
-        }
+        const odds = await this.openrouter.getMatchOdds(homeTeam.name, awayTeam.name);
 
         // Prepare match data for database
         const matchData = {
@@ -74,23 +77,18 @@ class FixtureSyncService {
           status: match.status,
           google_link: match.googleLink || undefined,
           broadcast_channel: match.broadcastChannel || undefined,
-          home_win_probability: odds?.homeWin,
-          away_win_probability: odds?.awayWin,
-          draw_probability: odds?.draw,
+          home_win_probability: odds.homeWin,
+          away_win_probability: odds.awayWin,
+          draw_probability: odds.draw,
           notified: false,
           voice_room_created: false,
         };
 
-        // Save match to database
-        try {
-          await this.supabase.upsertMatch(matchData);
-        } catch (dbError) {
-          console.error(`❌ Veritabanına kayıt hatası: ${homeTeam.name} vs ${awayTeam.name}`, dbError);
-          throw dbError;
-        }
+        // Upsert match to database
+        await this.supabase.upsertMatch(matchData);
       }
     } catch (error) {
-      console.error(`❌ ${league.name} ligi için maç senkronizasyonu başarısız:`, error);
+      console.error(`Error syncing fixtures for ${league.name}:`, error);
       throw error;
     }
   }
@@ -109,6 +107,7 @@ class FixtureSyncService {
           logo: teamWithLogo.logo,
           short_name: teamWithLogo.short_name,
         });
+        console.log(`Created new team: ${dbTeam.name}`);
       } else {
         // Fallback to basic team info if logo search fails
         dbTeam = await this.supabase.upsertTeam({
@@ -116,6 +115,7 @@ class FixtureSyncService {
           logo: team.logo || '',
           short_name: team.short_name || team.name.substring(0, 3).toUpperCase(),
         });
+        console.log(`Created new team (no logo): ${dbTeam.name}`);
       }
     }
 
@@ -123,19 +123,28 @@ class FixtureSyncService {
   }
 }
 
-// Export class for use in API
-export { FixtureSyncService };
+// Export for use as Vercel serverless function
+export default async function handler(_req: any, res: any) {
+  try {
+    const syncService = new FixtureSyncService();
+    await syncService.syncAllFixtures();
+    res.status(200).json({ message: 'Fixture synchronization completed successfully!' });
+  } catch (error) {
+    console.error('Sync handler error:', error);
+    res.status(500).json({ error: 'Fixture synchronization failed' });
+  }
+}
 
 // For local testing
 if (require.main === module) {
   const syncService = new FixtureSyncService();
   syncService.syncAllFixtures()
     .then(() => {
-      console.log('✅ Sync completed');
+      console.log('Sync completed');
       process.exit(0);
     })
     .catch((error) => {
-      console.error('❌ Sync failed:', error);
+      console.error('Sync failed:', error);
       process.exit(1);
     });
 }

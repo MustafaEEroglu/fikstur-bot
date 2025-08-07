@@ -15,7 +15,8 @@ Discord tabanlı otomatik maç fikstürü bildirim botu. Bot, belirli liglerdeki
 - **Duplicate oda oluşturmayı engelleme** - Aynı anda birden fazla maç olsa bile sadece 1 oda
 - **Bilgilendirici oda isimleri** - Takım kısaltmaları ve lig bilgisi içeren oda isimleri
 - **Oda konumu** - Yeni oluşturulan odalar en üstte yer alır
-- **2 saat sonra otomatik oda temizleme** - Maç bitiminde otomatik temizleme
+- **3 saat sonra otomatik oda temizleme** - Maç bitiminde otomatik temizleme
+- **Discord Etkinlikleri** - Sesli odalar için Discord etkinlikleri oluşturma
 - **Zengin bildirimler** - Embed formatında rol etiketlemeli bildirimler
 
 ### 📅 Haftalık Fikstür
@@ -147,15 +148,11 @@ npm run dev
 
 ### Komutlar
 - `/hafta` - Gelecek 7 günlük maç fikstürünü gösterir
-- `/test-notification` - Test bildirimi gönderir
-- `/test-voice-room` - Test sesli oda oluşturur
-- `/list-matches` - Yaklaşan maçları listeler
-- `/clear-test-data` - Test verilerini temizler
 
 ### Otomatik Özellikler
 - **Maç Bildirimleri**: Maç başlamadan 1 saat önce otomatik bildirim
 - **Sesli Odalar**: Maç başlamadan 15 dakika önce otomatik sesli oda oluşturma
-- **Haftalık Kontrol**: Her 3 dakikada bir yeni maçları kontrol etme
+- **Haftalık Kontrol**: Her 5 dakikada bir yeni maçları kontrol etme
 
 ## 🚀 Dağıtım
 
@@ -182,9 +179,7 @@ CREATE TABLE teams (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   logo TEXT,
-  short_name VARCHAR(10) NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  short_name VARCHAR(10) NOT NULL
 );
 ```
 
@@ -192,19 +187,29 @@ CREATE TABLE teams (
 ```sql
 CREATE TABLE matches (
   id SERIAL PRIMARY KEY,
-  home_team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
-  away_team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
-  date TIMESTAMP WITH TIME ZONE NOT NULL,
-  time VARCHAR(10),
+  home_team_id INTEGER REFERENCES teams(id),
+  away_team_id INTEGER REFERENCES teams(id),
+  date TIMESTAMP NOT NULL,
+  time VARCHAR(10) NOT NULL,
   league VARCHAR(255) NOT NULL,
-  status VARCHAR(50) DEFAULT 'scheduled',
+  status VARCHAR(20) DEFAULT 'scheduled',
   google_link TEXT,
   broadcast_channel VARCHAR(255),
-  home_win_probability DECIMAL(5,2),
-  away_win_probability DECIMAL(5,2),
-  draw_probability DECIMAL(5,2),
+  home_win_probability INTEGER,
+  away_win_probability INTEGER,
+  draw_probability INTEGER,
   notified BOOLEAN DEFAULT FALSE,
   voice_room_created BOOLEAN DEFAULT FALSE,
+  event_id VARCHAR(255) -- Discord etkinlik ID'si
+);
+```
+
+### events Tablosu
+```sql
+CREATE TABLE events (
+  id SERIAL PRIMARY KEY,
+  match_id INTEGER REFERENCES matches(id) ON DELETE CASCADE,
+  discord_event_id VARCHAR(255) UNIQUE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -215,97 +220,9 @@ CREATE TABLE matches (
 CREATE TABLE roles (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
-  team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  team_id INTEGER REFERENCES teams(id)
 );
 ```
-
-### Database View'leri
-```sql
--- Yaklaşan maçlar için view
-CREATE OR REPLACE VIEW upcoming_matches_view AS
-SELECT 
-    m.id,
-    m.date,
-    m.time,
-    m.league,
-    m.status,
-    m.google_link,
-    m.broadcast_channel,
-    m.home_win_probability,
-    m.away_win_probability,
-    m.draw_probability,
-    m.notified,
-    m.voice_room_created,
-    ht.name as home_team_name,
-    ht.logo as home_team_logo,
-    ht.short_name as home_team_short_name,
-    at.name as away_team_name,
-    at.logo as away_team_logo,
-    at.short_name as away_team_short_name
-FROM matches m
-JOIN teams ht ON m.home_team_id = ht.id
-JOIN teams at ON m.away_team_id = at.id
-WHERE m.status = 'scheduled' 
-  AND m.date >= NOW()
-  AND m.date <= NOW() + INTERVAL '7 days'
-ORDER BY m.date ASC;
-
--- Bildirim için view
-CREATE OR REPLACE VIEW notification_matches_view AS
-SELECT 
-    m.id,
-    m.date,
-    m.time,
-    m.league,
-    m.google_link,
-    m.broadcast_channel,
-    ht.name as home_team_name,
-    ht.logo as home_team_logo,
-    ht.short_name as home_team_short_name,
-    at.name as away_team_name,
-    at.logo as away_team_logo,
-    at.short_name as away_team_short_name
-FROM matches m
-JOIN teams ht ON m.home_team_id = ht.id
-JOIN teams at ON m.away_team_id = at.id
-WHERE m.status = 'scheduled' 
-  AND m.notified = false
-  AND m.date >= NOW()
-  AND m.date <= NOW() + INTERVAL '1 hour'
-ORDER BY m.date ASC;
-
--- Sesli oda için view
-CREATE OR REPLACE VIEW voice_room_matches_view AS
-SELECT 
-    m.id,
-    m.date,
-    m.time,
-    m.league,
-    ht.name as home_team_name,
-    ht.logo as home_team_logo,
-    ht.short_name as home_team_short_name,
-    at.name as away_team_name,
-    at.logo as away_team_logo,
-    at.short_name as away_team_short_name
-FROM matches m
-JOIN teams ht ON m.home_team_id = ht.id
-JOIN teams at ON m.away_team_id = at.id
-WHERE m.status = 'scheduled' 
-  AND m.voice_room_created = false
-  AND m.date >= NOW()
-  AND m.date <= NOW() + INTERVAL '15 minutes'
-ORDER BY m.date ASC;
-```
-
-## 🔧 API Endpoint'leri
-
-### Maç Senkronizasyonu
-```bash
-POST /api/syncFixtures
-```
-Bu endpoint, tüm takımlar için maç verilerini senkronize eder.
 
 ## 🤝 Katkıda Bulunma
 

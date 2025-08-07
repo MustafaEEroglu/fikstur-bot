@@ -28,13 +28,7 @@ export async function handleTestCommand(interaction: any, supabase: SupabaseServ
   
   try {
     console.log(`🧪 Test komutu tetiklendi: ${command} - Kullanıcı: ${interaction.user.tag}`);
-    
-    // Daha güvenli hata yönetimi için deferReply kontrolü
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.deferReply().catch((deferError: any) => {
-        console.log('⚠️ deferReply hatası:', deferError);
-      });
-    }
+    await interaction.deferReply();
     
     switch (command) {
       case 'test-notification':
@@ -66,13 +60,6 @@ export async function handleTestCommand(interaction: any, supabase: SupabaseServ
         await interaction.editReply({ 
           content: '🧪 **TEST BİLDİRİMİ**',
           embeds: [embed] 
-        }).catch((editError: any) => {
-          console.log('⚠️ editReply hatası:', editError);
-          // Eğer editReply başarısız olursa, yeni bir reply dene
-          return interaction.reply({ 
-            content: '🧪 **TEST BİLDİRİMİ**',
-            embeds: [embed] 
-          });
         });
         console.log('✅ Test bildirimi gönderildi');
         break;
@@ -86,10 +73,7 @@ export async function handleTestCommand(interaction: any, supabase: SupabaseServ
         const guild = interaction.guild;
         if (!guild) {
           console.log('❌ Sunucu bulunamadı!');
-          await interaction.editReply('Sunucu bulunamadı!').catch((editError: any) => {
-            console.log('⚠️ editReply hatası:', editError);
-            return interaction.reply('Sunucu bulunamadı!');
-          });
+          await interaction.editReply('Sunucu bulunamadı!');
           return;
         }
         
@@ -101,9 +85,6 @@ export async function handleTestCommand(interaction: any, supabase: SupabaseServ
           name: '🧪 TEST MAÇ ODASI',
           type: ChannelType.GuildVoice,
           reason: 'Test sesli oda',
-        }).catch((createError: any) => {
-          console.log('❌ Kanal oluşturma hatası:', createError);
-          throw new Error('Test sesli oda oluşturulamadı');
         });
         
         console.log('✅ Test sesli kanal oluşturuldu:', voiceChannel.name);
@@ -128,9 +109,7 @@ export async function handleTestCommand(interaction: any, supabase: SupabaseServ
           .setTimestamp();
         
         console.log('📤 Bildirim gönderiliyor...');
-        await voiceChannel.send({ embeds: [testEmbed] }).catch((sendError: any) => {
-          console.log('⚠️ Bildirim gönderme hatası:', sendError);
-        });
+        await voiceChannel.send({ embeds: [testEmbed] });
         console.log('✅ Test bildirimi başarıyla gönderildi');
         
         // 5 dakika sonra otomatik sil
@@ -145,10 +124,7 @@ export async function handleTestCommand(interaction: any, supabase: SupabaseServ
           }
         }, 5 * 60 * 1000);
         
-        await interaction.editReply(`🧪 Test sesli oda oluşturuldu: ${voiceChannel}`).catch((editError: any) => {
-          console.log('⚠️ editReply hatası:', editError);
-          return interaction.reply(`🧪 Test sesli oda oluşturuldu: ${voiceChannel}`);
-        });
+        await interaction.editReply(`🧪 Test sesli oda oluşturuldu: ${voiceChannel}`);
         console.log('✅ Test komutu başarıyla tamamlandı');
         console.log('📋 Oluşturulan kanal bilgileri:');
         console.log(`   - Ad: ${voiceChannel.name}`);
@@ -163,10 +139,7 @@ export async function handleTestCommand(interaction: any, supabase: SupabaseServ
         const matches = await supabase.getUpcomingMatches(1);
         
         if (matches.length === 0) {
-          await interaction.editReply('Yaklaşan maç bulunamadı.').catch((editError: any) => {
-            console.log('⚠️ editReply hatası:', editError);
-            return interaction.reply('Yaklaşan maç bulunamadı.');
-          });
+          await interaction.editReply('Yaklaşan maç bulunamadı.');
           return;
         }
         
@@ -185,38 +158,20 @@ export async function handleTestCommand(interaction: any, supabase: SupabaseServ
         }
         
         embedList.setDescription(description);
-        await interaction.editReply({ embeds: [embedList] }).catch((editError: any) => {
-          console.log('⚠️ editReply hatası:', editError);
-          return interaction.reply({ embeds: [embedList] });
-        });
+        await interaction.editReply({ embeds: [embedList] });
         console.log('✅ Maç listesi gönderildi, toplam maç sayısı:', matches.length);
         break;
         
       case 'clear-test-data':
         // Test verilerini temizle (bu komut sadece geliştirme ortamında kullanılmalı)
-        await interaction.editReply('⚠️ Test verileri temizlenemez - Bu özellik sadece geliştirme ortamında kullanılabilir.').catch((editError: any) => {
-          console.log('⚠️ editReply hatası:', editError);
-          return interaction.reply('⚠️ Test verileri temizlenemez - Bu özellik sadece geliştirme ortamında kullanılabilir.');
-        });
+        await interaction.editReply('⚠️ Test verileri temizlenemez - Bu özellik sadece geliştirme ortamında kullanılabilir.');
         break;
         
       default:
-        await interaction.editReply('Bilinmeyen komut.').catch((editError: any) => {
-          console.log('⚠️ editReply hatası:', editError);
-          return interaction.reply('Bilinmeyen komut.');
-        });
+        await interaction.editReply('Bilinmeyen komut.');
     }
   } catch (error) {
     console.error('❌ Test komutu hatası:', error);
-    
-    // Daha güvenli hata mesajı gönderme
-    try {
-      await interaction.editReply('Test komutu çalıştırılırken bir hata oluştu.').catch((editError: any) => {
-        console.log('⚠️ Hata mesajı gönderilemedi:', editError);
-        return interaction.reply('Test komutu çalıştırılırken bir hata oluştu.');
-      });
-    } catch (replyError) {
-      console.error('❌ Hata mesajı bile gönderilemedi:', replyError);
-    }
+    await interaction.editReply('Test komutu çalıştırılırken bir hata oluştu.');
   }
 }

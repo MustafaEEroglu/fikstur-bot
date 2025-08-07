@@ -26,7 +26,7 @@ export class SupabaseService {
       .select()
       .single();
 
-    if (error) throw new Error(`Takım güncelleme hatası: ${error.message}`);
+    if (error) throw new Error(`Error upserting team: ${error.message}`);
     return data;
   }
 
@@ -37,7 +37,7 @@ export class SupabaseService {
       .eq('name', name)
       .single();
 
-    if (error && error.code !== 'PGRST116') throw new Error(`Takım bilgisi alınamadı: ${error.message}`);
+    if (error && error.code !== 'PGRST116') throw new Error(`Error fetching team: ${error.message}`);
     return data;
   }
 
@@ -76,7 +76,7 @@ export class SupabaseService {
         .select()
         .single();
 
-    if (error) throw new Error(`Maç güncelleme hatası: ${error.message}`);
+      if (error) throw new Error(`Error updating match: ${error.message}`);
       return data;
     } else {
       // Match doesn't exist, insert it
@@ -86,7 +86,7 @@ export class SupabaseService {
         .select()
         .single();
 
-    if (error) throw new Error(`Yeni maç eklenemedi: ${error.message}`);
+      if (error) throw new Error(`Error inserting match: ${error.message}`);
       return data;
     }
   }
@@ -116,7 +116,7 @@ export class SupabaseService {
       .order('date', { ascending: true })
       .limit(50); // Limit to prevent large data sets
 
-    if (error) throw new Error(`Bildirim için maçlar alınamadı: ${error.message}`);
+    if (error) throw new Error(`Error fetching matches for notification: ${error.message}`);
     
     // Cache the result
     this.matchesCache.set(cacheKey, {
@@ -152,7 +152,7 @@ export class SupabaseService {
       .order('date', { ascending: true })
       .limit(20); // Limit to prevent large data sets
 
-    if (error) throw new Error(`Sesli oda için maçlar alınamadı: ${error.message}`);
+    if (error) throw new Error(`Error fetching matches for voice room: ${error.message}`);
     
     // Cache the result
     this.matchesCache.set(cacheKey, {
@@ -187,7 +187,7 @@ export class SupabaseService {
       .order('date', { ascending: true })
       .limit(100); // Limit to prevent large data sets
 
-    if (error) throw new Error(`Yaklaşan maçlar alınamadı: ${error.message}`);
+    if (error) throw new Error(`Error fetching upcoming matches: ${error.message}`);
     
     // Cache the result
     this.matchesCache.set(cacheKey, {
@@ -204,13 +204,63 @@ export class SupabaseService {
       .update(updates)
       .eq('id', matchId);
 
-    if (error) throw new Error(`Maç durumu güncellenemedi: ${error.message}`);
+    if (error) throw new Error(`Error updating match status: ${error.message}`);
     
     // Cache'i temizle
     this.matchesCache.clear();
     this.rolesCache = null;
   }
 
+  async updateMatchWithEventId(matchId: number, eventId: string): Promise<void> {
+    const { error } = await this.adminClient
+      .from('matches')
+      .update({ event_id: eventId })
+      .eq('id', matchId);
+
+    if (error) throw new Error(`Error updating match with event ID: ${error.message}`);
+  }
+
+  async getMatchesByEventId(eventId: string): Promise<Match[]> {
+    const { data, error } = await this.client
+      .from('matches')
+      .select('*')
+      .eq('event_id', eventId);
+
+    if (error) throw new Error(`Error fetching matches by event ID: ${error.message}`);
+    return data || [];
+  }
+
+  async createEvent(matchId: number, discordEventId: string): Promise<any> {
+    const { data, error } = await this.adminClient
+      .from('events')
+      .insert({
+        match_id: matchId,
+        discord_event_id: discordEventId,
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(`Error creating event: ${error.message}`);
+    return data;
+  }
+
+  async updateEvent(eventId: number, updates: Partial<any>): Promise<void> {
+    const { error } = await this.adminClient
+      .from('events')
+      .update(updates)
+      .eq('id', eventId);
+
+    if (error) throw new Error(`Error updating event: ${error.message}`);
+  }
+
+  async deleteEventByDiscordId(discordEventId: string): Promise<void> {
+    const { error } = await this.adminClient
+      .from('events')
+      .delete()
+      .eq('discord_event_id', discordEventId);
+
+    if (error) throw new Error(`Error deleting event: ${error.message}`);
+  }
 
   // Role operations
   async getRoles(): Promise<DiscordRole[]> {
@@ -222,9 +272,9 @@ export class SupabaseService {
     // Fetch from database if not in cache or cache expired
     const { data, error } = await this.client
       .from('roles')
-      .select('id, name, team_id');
+      .select('id, name, team_id'); // Use team_id instead of teamId
 
-    if (error) throw new Error(`Roller alınamadı: ${error.message}`);
+    if (error) throw new Error(`Error fetching roles: ${error.message}`);
     
     // Update cache and map team_id to teamId for TypeScript compatibility
     const mappedData = (data || []).map(role => ({
@@ -245,9 +295,9 @@ export class SupabaseService {
       .from('roles')
       .select('*')
       .or(`name.ilike.%${teamName}%,team_id.in.(select id from teams where name.ilike.%${teamName}%)`)
-      .limit(1);
+      .limit(1); // Limit to single result for better performance
 
-    if (error && error.code !== 'PGRST116') throw new Error(`Rol bilgisi alınamadı: ${error.message}`);
+    if (error && error.code !== 'PGRST116') throw new Error(`Error fetching role: ${error.message}`);
     return data?.[0] || null;
   }
 
@@ -258,7 +308,7 @@ export class SupabaseService {
       .eq('name', 'barbarlar')
       .single();
 
-    if (error && error.code !== 'PGRST116') throw new Error(`Barbar rolü alınamadı: ${error.message}`);
+    if (error && error.code !== 'PGRST116') throw new Error(`Error fetching barbar role: ${error.message}`);
     
     // Map team_id to teamId for TypeScript compatibility
     return data ? { ...data, teamId: data.team_id } : null;

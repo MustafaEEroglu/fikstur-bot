@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { config } from '../utils/config';
 import { Match, Team, LeagueConfig } from '../types';
+import { addDays } from 'date-fns';
 
 export class SerpApiService {
   private apiKey: string;
@@ -13,62 +14,357 @@ export class SerpApiService {
     this.apiKey = config.serpapi.apiKey;
   }
 
-  async fetchFixtures(league: LeagueConfig): Promise<Match[]> {
+  async fetchFixtures(leagueConfig: LeagueConfig): Promise<Match[]> {
+    const today = new Date();
+    const nextWeek = addDays(today, 7);
+    
+    // Use the correct sports results engine as per SerpApi documentation
     const params = {
-      q: `${league.serpApiQuery} fixtures`,
+      q: `${leagueConfig.serpApiQuery} fixtures`,
       location: 'Istanbul, Turkey',
       api_key: this.apiKey,
     };
 
     try {
       const response = await axios.get(this.baseUrl, { params });
-      
       const matches: Match[] = [];
 
+      console.log(`🔍 SerpApi response for ${leagueConfig.name}:`, JSON.stringify(response.data, null, 2));
+
       // Check for sports_results in the response
-      if (response.data.sports_results) {
-        // Check games array
-        if (response.data.sports_results.games && response.data.sports_results.games.length > 0) {
-          for (const game of response.data.sports_results.games) {
-            const match = this.parseGame(game, league.name);
+      if (response.data.sports_results && response.data.sports_results.games) {
+        console.log(`📋 Found ${response.data.sports_results.games.length} games in sports_results.games`);
+        for (const game of response.data.sports_results.games) {
+          // Parse the date from the game
+          const gameDate = this.parseGameDate(game.date);
+          console.log(`📅 Parsing date: "${game.date}" -> ${gameDate ? gameDate.toISOString() : 'null'}`);
+          if (gameDate && gameDate >= today && gameDate <= nextWeek) {
+            const match = this.parseGame(game, leagueConfig.name);
             if (match) {
               matches.push(match);
+              console.log(`✅ Added match: ${match.homeTeam.name} vs ${match.awayTeam.name} at ${match.date}`);
             }
-          }
-        }
-        
-        // Check game_spotlight
-        if (response.data.sports_results.game_spotlight) {
-          const spotlightMatch = this.parseGame(response.data.sports_results.game_spotlight, league.name);
-          if (spotlightMatch) {
-            matches.push(spotlightMatch);
+          } else {
+            console.log(`❌ Match filtered out: ${game.teams?.[0]?.name} vs ${game.teams?.[1]?.name} - Date: ${gameDate ? gameDate.toISOString() : 'null'} - Range: ${today.toISOString()} to ${nextWeek.toISOString()}`);
           }
         }
       }
 
-      // Check organic_results for additional matches
-      if (response.data.organic_results && response.data.organic_results.length > 0) {
+      // Check for knowledge_graph in the response (alternative location for game data)
+      if (response.data.knowledge_graph && response.data.knowledge_graph.games) {
+        console.log(`📋 Found ${response.data.knowledge_graph.games.length} games in knowledge_graph.games`);
+        for (const game of response.data.knowledge_graph.games) {
+          const gameDate = this.parseGameDate(game.date);
+          console.log(`📅 Parsing knowledge_graph date: "${game.date}" -> ${gameDate ? gameDate.toISOString() : 'null'}`);
+          if (gameDate && gameDate >= today && gameDate <= nextWeek) {
+            const match = this.parseGame(game, leagueConfig.name);
+            if (match) {
+              matches.push(match);
+              console.log(`✅ Added match from knowledge_graph: ${match.homeTeam.name} vs ${match.awayTeam.name} at ${match.date}`);
+            }
+          }
+        }
+      }
+
+      // Check for organic_results in the response (another possible location)
+      if (response.data.organic_results) {
         for (const result of response.data.organic_results) {
-          // Look for match information in organic results
-          if (result.title && result.title.toLowerCase().includes('besiktas') && result.title.toLowerCase().includes('2025')) {
-            const organicMatch = this.parseOrganicResult(result, league.name);
-            if (organicMatch) {
-              matches.push(organicMatch);
+          // Look for result that contains match information
+          if (result.title && result.title.toLowerCase().includes('vs') && result.date) {
+            const gameDate = this.parseGameDate(result.date);
+            console.log(`📅 Parsing organic_result date: "${result.date}" -> ${gameDate ? gameDate.toISOString() : 'null'}`);
+            if (gameDate && gameDate >= today && gameDate <= nextWeek) {
+              const match = this.parseOrganicResult(result, leagueConfig.name);
+              if (match) {
+                matches.push(match);
+                console.log(`✅ Added match from organic_results: ${match.homeTeam.name} vs ${match.awayTeam.name} at ${match.date}`);
+              }
             }
           }
         }
       }
 
+      console.log(`🎯 Total matches found for ${leagueConfig.name}: ${matches.length}`);
       return matches;
     } catch (error: any) {
-      console.error(`❌ SerpApi hatası: ${league.name} ligi için maçlar alınamadı`, error);
+      console.error(`Error fetching fixtures for ${leagueConfig.name}:`, error);
+      if (error.response) {
+        console.error('SerpApi Error Response:', error.response.data);
+      }
       return [];
+    }
+  }
+
+  private parseGameDate(dateStr: string): Date | null {
+    try {
+      // Check if dateStr is undefined or null
+      if (!dateStr) {
+        return null;
+      }
+      
+      const today = new Date();
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      // 1. Handle "today, HH:MM XM" format
+      const todayTimeMatch = dateStr.toLowerCase().match(/today,\s*(\d{1,2}):(\d{2})\s*(am|pm)/i);
+      if (todayTimeMatch) {
+        let hour = parseInt(todayTimeMatch[1]);
+        const minute = parseInt(todayTimeMatch[2]);
+        const period = todayTimeMatch[3].toUpperCase();
+        
+        if (period === 'PM' && hour !== 12) {
+          hour += 12;
+        } else if (period === 'AM' && hour === 12) {
+          hour = 0;
+        }
+        
+        today.setHours(hour, minute, 0, 0);
+        return today;
+      }
+      
+      // 1a. Handle "today HH:MM XM" format (virgül olmadan)
+      const todayTimeMatchNoComma = dateStr.toLowerCase().match(/today\s+(\d{1,2}):(\d{2})\s*(am|pm)/i);
+      if (todayTimeMatchNoComma) {
+        let hour = parseInt(todayTimeMatchNoComma[1]);
+        const minute = parseInt(todayTimeMatchNoComma[2]);
+        const period = todayTimeMatchNoComma[3].toUpperCase();
+        
+        if (period === 'PM' && hour !== 12) {
+          hour += 12;
+        } else if (period === 'AM' && hour === 12) {
+          hour = 0;
+        }
+        
+        today.setHours(hour, minute, 0, 0);
+        return today;
+      }
+      
+      // 1b. Handle "today HH:XX" format (AM/PM olmadan)
+      const todayTimeMatch24 = dateStr.toLowerCase().match(/today\s+(\d{1,2}):(\d{2})/i);
+      if (todayTimeMatch24) {
+        const hour = parseInt(todayTimeMatch24[1]);
+        const minute = parseInt(todayTimeMatch24[2]);
+        
+        today.setHours(hour, minute, 0, 0);
+        return today;
+      }
+      
+      // 2. Handle "tomorrow, HH:MM XM" format
+      const tomorrowTimeMatch = dateStr.toLowerCase().match(/tomorrow,\s*(\d{1,2}):(\d{2})\s*(am|pm)/i);
+      if (tomorrowTimeMatch) {
+        let hour = parseInt(tomorrowTimeMatch[1]);
+        const minute = parseInt(tomorrowTimeMatch[2]);
+        const period = tomorrowTimeMatch[3].toUpperCase();
+        
+        if (period === 'PM' && hour !== 12) {
+          hour += 12;
+        } else if (period === 'AM' && hour === 12) {
+          hour = 0;
+        }
+        
+        tomorrow.setHours(hour, minute, 0, 0);
+        return tomorrow;
+      }
+      
+      // 3. Handle simple "today" and "tomorrow"
+      if (dateStr.toLowerCase() === 'today') {
+        return today;
+      }
+      
+      if (dateStr.toLowerCase() === 'tomorrow') {
+        return tomorrow;
+      }
+      
+      // 4. Handle postponed matches
+      if (dateStr.toLowerCase().includes('postponed') || dateStr.toLowerCase().includes('ertelendi')) {
+        return today;
+      }
+      
+      // 5. Handle matches with no specific time yet
+      if (dateStr.toLowerCase().includes('henüz belirlenmedi') || 
+          dateStr.toLowerCase().includes('tba') || 
+          dateStr.toLowerCase().includes('tbd') ||
+          dateStr.toLowerCase().includes('time tba') ||
+          dateStr.toLowerCase().includes('time tbd')) {
+        return today;
+      }
+      
+      // 6. Handle date formats with dots: "06.08.2025" or "06.08.25"
+      if (dateStr.includes('.')) {
+        const parts = dateStr.split('.');
+        if (parts.length >= 3) {
+          const day = parseInt(parts[0]);
+          const month = parseInt(parts[1]);
+          let year = parts[2];
+          
+          // Handle 2-digit year
+          if (year.length === 2) {
+            const currentYear = today.getFullYear();
+            const currentCentury = Math.floor(currentYear / 100) * 100;
+            year = (currentCentury + parseInt(year)).toString();
+          }
+          
+          return new Date(parseInt(year), month - 1, day);
+        }
+      }
+      
+      // 7. Handle various month-day formats
+      const monthDayPatterns = [
+        // "Aug 24", "Aug 24, 2025", "24 Aug", "24 Aug, 2025"
+        /(\w+)\s+(\d{1,2})(?:,\s*(\d{4}))?/i,
+        /(\d{1,2})\s+(\w+)(?:,\s*(\d{4}))?/i,
+        // "August 24", "August 24, 2025", "24 August", "24 August, 2025"
+        /(\w{3,})\s+(\d{1,2})(?:,\s*(\d{4}))?/i,
+        /(\d{1,2})\s+(\w{3,})(?:,\s*(\d{4}))?/i,
+      ];
+      
+      for (const pattern of monthDayPatterns) {
+        const match = dateStr.match(pattern);
+        if (match) {
+          let monthName, day, year;
+          
+          if (match[1].match(/^\d+$/)) {
+            // Day first format: "24 Aug"
+            day = parseInt(match[1]);
+            monthName = match[2];
+            year = match[3] || today.getFullYear().toString();
+          } else {
+            // Month first format: "Aug 24"
+            monthName = match[1];
+            day = parseInt(match[2]);
+            year = match[3] || today.getFullYear().toString();
+          }
+          
+          const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
+          return new Date(parseInt(year), monthIndex, day);
+        }
+      }
+      
+      // 8. Handle "Fri, Aug 8" or "Friday, Aug 8" format
+      const dayMonthYearPattern = /(?:\w+,\s*)?(\w+)\s+(\d{1,2})(?:,\s*(\d{4}))?/i;
+      const dayMonthYearMatch = dateStr.match(dayMonthYearPattern);
+      if (dayMonthYearMatch) {
+        const monthName = dayMonthYearMatch[1];
+        const day = parseInt(dayMonthYearMatch[2]);
+        const year = dayMonthYearMatch[3] || today.getFullYear().toString();
+        
+        const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
+        return new Date(parseInt(year), monthIndex, day);
+      }
+      
+      // 9. Handle numeric formats like "08/06/2025" or "08-06-2025"
+      const numericPatterns = [
+        /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/, // MM/DD/YYYY or MM-DD-YYYY
+        /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/, // YYYY/MM/DD or YYYY-MM-DD
+      ];
+      
+      for (const pattern of numericPatterns) {
+        const match = dateStr.match(pattern);
+        if (match) {
+          let year, month, day;
+          
+          if (match[1].length === 4) {
+            // YYYY/MM/DD format
+            year = parseInt(match[1]);
+            month = parseInt(match[2]);
+            day = parseInt(match[3]);
+          } else {
+            // MM/DD/YYYY format
+            month = parseInt(match[1]);
+            day = parseInt(match[2]);
+            year = parseInt(match[3]);
+          }
+          
+          return new Date(year, month - 1, day);
+        }
+      }
+      
+      // 10. Handle relative dates like "in 2 days", "next week"
+      const relativePatterns = [
+        /in\s+(\d+)\s+days?/i,
+        /(\d+)\s+days?\s+from\s+now/i,
+        /next\s+week/i,
+        /this\s+weekend/i,
+      ];
+      
+      for (const pattern of relativePatterns) {
+        const match = dateStr.match(pattern);
+        if (match) {
+          let daysToAdd = 0;
+          
+          if (match[1]) {
+            daysToAdd = parseInt(match[1]);
+          } else if (match[0].toLowerCase().includes('next week')) {
+            daysToAdd = 7;
+          } else if (match[0].toLowerCase().includes('this weekend')) {
+            // Add days to reach next Saturday/Sunday
+            const daysUntilWeekend = (6 - today.getDay() + 7) % 7;
+            daysToAdd = daysUntilWeekend || 7;
+          }
+          
+          const resultDate = new Date(today);
+          resultDate.setDate(today.getDate() + daysToAdd);
+          return resultDate;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private parseOrganicResult(result: any, league: string): Match | null {
+    try {
+      // Extract team names from title
+      const title = result.title || '';
+      const vsMatch = title.match(/(.+?)\s+vs\s+(.+?)(?:\s+-\s+.+)?$/i);
+      
+      if (!vsMatch) return null;
+      
+      const homeTeamName = vsMatch[1].trim();
+      const awayTeamName = vsMatch[2].trim();
+      
+      // Parse date
+      const gameDate = this.parseGameDate(result.date);
+      if (!gameDate) return null;
+      
+      // Use default time if not specified
+      let time = '20:00';
+      
+      // Format date
+      const formattedDate = `${gameDate.getFullYear()}-${String(gameDate.getMonth() + 1).padStart(2, '0')}-${String(gameDate.getDate()).padStart(2, '0')}T${time}:00+03:00`;
+
+      return {
+        id: 0,
+        homeTeam: {
+          id: 0,
+          name: homeTeamName,
+          logo: '',
+          short_name: homeTeamName.substring(0, 3).toUpperCase(),
+        },
+        awayTeam: {
+          id: 0,
+          name: awayTeamName,
+          logo: '',
+          short_name: awayTeamName.substring(0, 3).toUpperCase(),
+        },
+        date: formattedDate,
+        time: time,
+        league: league,
+        status: 'scheduled',
+        googleLink: '',
+        broadcastChannel: '',
+      };
+    } catch (error) {
+      console.error('Error parsing organic result:', error);
+      return null;
     }
   }
 
   private parseGame(game: any, league: string): Match | null {
     try {
-      // Check if teams exist
       if (!game.teams || game.teams.length !== 2) {
         return null;
       }
@@ -76,30 +372,26 @@ export class SerpApiService {
       const homeTeam = game.teams[0];
       const awayTeam = game.teams[1];
 
-      // Parse date
+      // Parse date and time
       const gameDate = this.parseGameDate(game.date);
-      if (!gameDate) {
-        return null;
-      }
+      if (!gameDate) return null;
 
       // Add time if available, otherwise use default
-      let time = game.time || '20:00';
+      let time = game.time || '20:00'; // Default time if not specified
       
       // Convert 12-hour format to 24-hour format
       if (time.includes('PM') || time.includes('pm')) {
         const cleanTime = time.replace(' PM', '').replace(' pm', '').replace('P.M.', '').replace('p.m.', '');
         const [hour, minute] = cleanTime.split(':');
         let hour24 = parseInt(hour);
-        // Düzeltme: 12 PM kontrolü
         if (hour24 !== 12) {
           hour24 += 12;
         }
         time = `${hour24.toString().padStart(2, '0')}:${minute}`;
       } else if (time.includes('AM') || time.includes('am')) {
-        const cleanTime = time.replace(' AM', '').replace(' am', '').replace('A.M.', '').replace('a.m.', '');
+        const cleanTime = time.replace(' AM', '').replace(' am').replace('A.M.', '').replace('a.m.', '');
         const [hour, minute] = cleanTime.split(':');
         let hour24 = parseInt(hour);
-        // Düzeltme: 12 AM kontrolü
         if (hour24 === 12) {
           hour24 = 0;
         }
@@ -140,178 +432,7 @@ export class SerpApiService {
         broadcastChannel: game.venue || '',
       };
     } catch (error) {
-      console.error('❌ Maç ayrıştırma hatası:', error);
-      return null;
-    }
-  }
-
-  private parseOrganicResult(result: any, league: string): Match | null {
-    try {
-      // Extract team names from title
-      const title = result.title.toLowerCase();
-      
-      // Look for team names in the title
-      const teams = [];
-      if (title.includes('besiktas')) {
-        teams.push('Beşiktaş');
-      }
-      if (title.includes('st patrick')) {
-        teams.push('St Patrick\'s Athletic');
-      }
-      
-      if (teams.length !== 2) {
-        return null;
-      }
-      
-      // Parse date from snippet or title
-      const dateMatch = result.snippet?.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/) || 
-                       result.title?.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-      
-      if (!dateMatch) {
-        return null;
-      }
-      
-      const day = parseInt(dateMatch[1]);
-      const month = parseInt(dateMatch[2]);
-      const year = parseInt(dateMatch[3]);
-      
-      const gameDate = new Date(year, month - 1, day);
-      
-      // Parse time from snippet
-      const timeMatch = result.snippet?.match(/(\d{1,2}):(\d{2})\s*(?:am|pm|AM|PM)/i) ||
-                       result.snippet?.match(/(\d{1,2}):(\d{2})/);
-      
-      let time = '20:00';
-      if (timeMatch) {
-        let hour = parseInt(timeMatch[1]);
-        const minute = parseInt(timeMatch[2]);
-        
-        // Düzeltme: 12 saat formatı dönüşümü
-        if (timeMatch[0].toLowerCase().includes('pm')) {
-          if (hour !== 12) {
-            hour += 12;
-          }
-        } else if (timeMatch[0].toLowerCase().includes('am')) {
-          if (hour === 12) {
-            hour = 0;
-          }
-        }
-        
-        time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      }
-      
-      const formattedDate = `${gameDate.getFullYear()}-${String(gameDate.getMonth() + 1).padStart(2, '0')}-${String(gameDate.getDate()).padStart(2, '0')}T${time}:00+03:00`;
-      
-      return {
-        id: 0,
-        homeTeam: {
-          id: 0,
-          name: teams[0],
-          logo: '',
-          short_name: teams[0].substring(0, 3).toUpperCase(),
-        },
-        awayTeam: {
-          id: 0,
-          name: teams[1],
-          logo: '',
-          short_name: teams[1].substring(0, 3).toUpperCase(),
-        },
-        date: formattedDate,
-        time: time,
-        league: league,
-        status: 'scheduled',
-        googleLink: '',
-        broadcastChannel: '',
-      };
-    } catch (error) {
-      console.error('❌ Organik sonuç ayrıştırma hatası:', error);
-      return null;
-    }
-  }
-
-  private parseGameDate(dateStr: string): Date | null {
-    try {
-      if (!dateStr) {
-        return null;
-      }
-      
-      const today = new Date();
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      
-      // Handle "today, HH:MM XM" format
-      const todayTimeMatch = dateStr.toLowerCase().match(/today,\s*(\d{1,2}):(\d{2})\s*(am|pm)/i);
-      if (todayTimeMatch) {
-        let hour = parseInt(todayTimeMatch[1]);
-        const minute = parseInt(todayTimeMatch[2]);
-        const period = todayTimeMatch[3].toUpperCase();
-        
-        // Düzeltme: 12 PM kontrolü
-        if (period === 'PM') {
-          if (hour !== 12) {
-            hour += 12;
-          }
-        } else if (period === 'AM') {
-          if (hour === 12) {
-            hour = 0;
-          }
-        }
-        
-        today.setHours(hour, minute, 0, 0);
-        return today;
-      }
-      
-      // Handle "tomorrow, HH:MM XM" format
-      const tomorrowTimeMatch = dateStr.toLowerCase().match(/tomorrow,\s*(\d{1,2}):(\d{2})\s*(am|pm)/i);
-      if (tomorrowTimeMatch) {
-        let hour = parseInt(tomorrowTimeMatch[1]);
-        const minute = parseInt(tomorrowTimeMatch[2]);
-        const period = tomorrowTimeMatch[3].toUpperCase();
-        
-        // Düzeltme: 12 PM kontrolü
-        if (period === 'PM') {
-          if (hour !== 12) {
-            hour += 12;
-          }
-        } else if (period === 'AM') {
-          if (hour === 12) {
-            hour = 0;
-          }
-        }
-        
-        tomorrow.setHours(hour, minute, 0, 0);
-        return tomorrow;
-      }
-      
-      // Handle simple "today" and "tomorrow" - SAAT BİLGİSİ OLMADAN DEĞİL!
-      if (dateStr.toLowerCase() === 'today') {
-        // Bugün ama saat bilgisi varsa onu kullan
-        return today;
-      }
-      
-      if (dateStr.toLowerCase() === 'tomorrow') {
-        // Yarın ama saat bilgisi varsa onu kullan
-        return tomorrow;
-      }
-      
-      // Handle date formats with dots: "06.08.2025" or "06.08.25"
-      if (dateStr.includes('.')) {
-        const parts = dateStr.split('.');
-        if (parts.length === 3) {
-          const day = parseInt(parts[0]);
-          const month = parseInt(parts[1]);
-          const year = parts[2].length === 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
-          
-          const parsedDate = new Date(year, month - 1, day);
-          if (!isNaN(parsedDate.getTime())) {
-            return parsedDate;
-          }
-        }
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('❌ Tarih ayrıştırma hatası:', error);
+      console.error('Error parsing game:', error);
       return null;
     }
   }
@@ -333,8 +454,7 @@ export class SerpApiService {
     this.requestQueue.set(cacheKey, requestPromise);
 
     try {
-      const result = await requestPromise;
-      return result;
+      return await requestPromise;
     } finally {
       this.requestQueue.delete(cacheKey);
     }
@@ -366,7 +486,7 @@ export class SerpApiService {
       }
       return null;
     } catch (error) {
-      console.error(`❌ Takım bilgisi alınamadı: ${teamName}`, error);
+      console.error(`Error searching for team ${teamName}:`, error);
       return null;
     }
   }
