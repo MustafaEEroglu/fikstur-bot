@@ -16,14 +16,14 @@
     }
   ],
   "env": {
-    "SUPABASE_URL": "@supabase_url",
-    "SUPABASE_ANON_KEY": "@supabase_anon_key",
-    "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_role_key",
-    "DISCORD_BOT_TOKEN": "@discord_bot_token",
-    "DISCORD_CLIENT_ID": "@discord_client_id",
-    "DISCORD_GUILD_ID": "@discord_guild_id",
-    "DISCORD_FIXTURE_CHANNEL_ID": "@discord_fixture_channel_id",
-    "OPENROUTER_API_KEY": "@openrouter_api_key",
-    "SERPAPI_API_KEY": "@serpapi_api_key"
+    "SUPABASE_URL": "supabase_url",
+    "SUPABASE_ANON_KEY": "supabase_anon_key",
+    "SUPABASE_SERVICE_ROLE_KEY": "supabase_service_role_key",
+    "DISCORD_BOT_TOKEN": "discord_bot_token",
+    "DISCORD_CLIENT_ID": "discord_client_id",
+    "DISCORD_GUILD_ID": "discord_guild_id",
+    "DISCORD_FIXTURE_CHANNEL_ID": "discord_fixture_channel_id",
+    "OPENROUTER_API_KEY": "openrouter_api_key",
+    "SERPAPI_API_KEY": "serpapi_api_key"
   }
 }
