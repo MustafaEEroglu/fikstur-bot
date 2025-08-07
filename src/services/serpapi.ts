@@ -7,7 +7,8 @@ export class SerpApiService {
   private apiKey: string;
   private baseUrl: string = 'https://serpapi.com/search.json';
   private teamCache = new Map<string, Team>();
-  private cacheTimeout = 24 * 60 * 60 * 1000; // 24 saat
+  private cacheTimeout = 48 * 60 * 60 * 1000; // 48 saat (uzatıldı)
+  private requestQueue = new Map<string, Promise<Team | null>>();
 
   constructor() {
     this.apiKey = config.serpapi.apiKey;
@@ -326,6 +327,23 @@ export class SerpApiService {
       return cached;
     }
 
+    // Check if request is already in progress
+    const cacheKey = teamName.toLowerCase();
+    if (this.requestQueue.has(cacheKey)) {
+      return this.requestQueue.get(cacheKey)!;
+    }
+
+    const requestPromise = this.makeTeamSearchRequest(cacheKey, teamName);
+    this.requestQueue.set(cacheKey, requestPromise);
+
+    try {
+      return await requestPromise;
+    } finally {
+      this.requestQueue.delete(cacheKey);
+    }
+  }
+
+  private async makeTeamSearchRequest(cacheKey: string, teamName: string): Promise<Team | null> {
     const params = {
       q: `${teamName} football club`,
       location: 'Istanbul, Turkey',
@@ -345,7 +363,7 @@ export class SerpApiService {
         };
         
         // Cache the result
-        this.teamCache.set(teamName.toLowerCase(), team);
+        this.teamCache.set(cacheKey, team);
         
         return team;
       }

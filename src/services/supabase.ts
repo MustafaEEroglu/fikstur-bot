@@ -5,7 +5,9 @@ import { Match, Team, DiscordRole } from '../types';
 export class SupabaseService {
   private client: SupabaseClient;
   private rolesCache: { data: DiscordRole[]; timestamp: number } | null = null;
-  private rolesCacheTimeout = 5 * 60 * 1000; // 5 dakika
+  private rolesCacheTimeout = 10 * 60 * 1000; // 10 dakika (uzatıldı)
+  private matchesCache = new Map<string, { matches: Match[]; timestamp: number }>();
+  private matchesCacheTimeout = 2 * 60 * 1000; // 2 dakika
 
   constructor() {
     this.client = createClient(config.supabase.url, config.supabase.anonKey);
@@ -90,6 +92,13 @@ export class SupabaseService {
   }
 
   async getMatchesForNotification(): Promise<Match[]> {
+    const cacheKey = 'matches-for-notification';
+    const cached = this.matchesCache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < this.matchesCacheTimeout) {
+      return cached.matches;
+    }
+    
     const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const now = new Date().toISOString();
 
@@ -108,10 +117,24 @@ export class SupabaseService {
       .limit(50); // Limit to prevent large data sets
 
     if (error) throw new Error(`Error fetching matches for notification: ${error.message}`);
+    
+    // Cache the result
+    this.matchesCache.set(cacheKey, {
+      matches: data || [],
+      timestamp: Date.now()
+    });
+    
     return data || [];
   }
 
   async getMatchesForVoiceRoom(): Promise<Match[]> {
+    const cacheKey = 'matches-for-voice-room';
+    const cached = this.matchesCache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < this.matchesCacheTimeout) {
+      return cached.matches;
+    }
+    
     const fifteenMinutesFromNow = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     const now = new Date().toISOString();
 
@@ -130,10 +153,24 @@ export class SupabaseService {
       .limit(20); // Limit to prevent large data sets
 
     if (error) throw new Error(`Error fetching matches for voice room: ${error.message}`);
+    
+    // Cache the result
+    this.matchesCache.set(cacheKey, {
+      matches: data || [],
+      timestamp: Date.now()
+    });
+    
     return data || [];
   }
 
   async getUpcomingMatches(days: number = 7): Promise<Match[]> {
+    const cacheKey = `upcoming-matches-${days}`;
+    const cached = this.matchesCache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < this.matchesCacheTimeout) {
+      return cached.matches;
+    }
+    
     const now = new Date().toISOString();
     const futureDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 
@@ -151,6 +188,13 @@ export class SupabaseService {
       .limit(100); // Limit to prevent large data sets
 
     if (error) throw new Error(`Error fetching upcoming matches: ${error.message}`);
+    
+    // Cache the result
+    this.matchesCache.set(cacheKey, {
+      matches: data || [],
+      timestamp: Date.now()
+    });
+    
     return data || [];
   }
 
@@ -161,58 +205,12 @@ export class SupabaseService {
       .eq('id', matchId);
 
     if (error) throw new Error(`Error updating match status: ${error.message}`);
+    
+    // Cache'i temizle
+    this.matchesCache.clear();
+    this.rolesCache = null;
   }
 
-  async updateMatchWithEventId(matchId: number, eventId: string): Promise<void> {
-    const { error } = await this.adminClient
-      .from('matches')
-      .update({ event_id: eventId })
-      .eq('id', matchId);
-
-    if (error) throw new Error(`Error updating match with event ID: ${error.message}`);
-  }
-
-  async getMatchesByEventId(eventId: string): Promise<Match[]> {
-    const { data, error } = await this.client
-      .from('matches')
-      .select('*')
-      .eq('event_id', eventId);
-
-    if (error) throw new Error(`Error fetching matches by event ID: ${error.message}`);
-    return data || [];
-  }
-
-  async createEvent(matchId: number, discordEventId: string): Promise<any> {
-    const { data, error } = await this.adminClient
-      .from('events')
-      .insert({
-        match_id: matchId,
-        discord_event_id: discordEventId,
-      })
-      .select()
-      .single();
-
-    if (error) throw new Error(`Error creating event: ${error.message}`);
-    return data;
-  }
-
-  async updateEvent(eventId: number, updates: Partial<any>): Promise<void> {
-    const { error } = await this.adminClient
-      .from('events')
-      .update(updates)
-      .eq('id', eventId);
-
-    if (error) throw new Error(`Error updating event: ${error.message}`);
-  }
-
-  async deleteEventByDiscordId(discordEventId: string): Promise<void> {
-    const { error } = await this.adminClient
-      .from('events')
-      .delete()
-      .eq('discord_event_id', discordEventId);
-
-    if (error) throw new Error(`Error deleting event: ${error.message}`);
-  }
 
   // Role operations
   async getRoles(): Promise<DiscordRole[]> {

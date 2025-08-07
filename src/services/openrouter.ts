@@ -5,7 +5,8 @@ import { OddsResponse } from '../types';
 export class OpenRouterService {
   private openai: OpenAI;
   private oddsCache = new Map<string, { odds: OddsResponse; timestamp: number }>();
-  private cacheTimeout = 30 * 60 * 1000; // 30 dakika
+  private cacheTimeout = 60 * 60 * 1000; // 1 saat (uzatıldı)
+  private requestQueue = new Map<string, Promise<OddsResponse>>();
 
   constructor() {
     this.openai = new OpenAI({
@@ -28,6 +29,22 @@ export class OpenRouterService {
       return cached.odds;
     }
 
+    // Check if request is already in progress
+    if (this.requestQueue.has(cacheKey)) {
+      return this.requestQueue.get(cacheKey)!;
+    }
+
+    const requestPromise = this.makeOddsRequest(cacheKey, homeTeam, awayTeam);
+    this.requestQueue.set(cacheKey, requestPromise);
+
+    try {
+      return await requestPromise;
+    } finally {
+      this.requestQueue.delete(cacheKey);
+    }
+  }
+
+  private async makeOddsRequest(cacheKey: string, homeTeam: string, awayTeam: string): Promise<OddsResponse> {
     const prompt = `
 You are a football betting expert. Analyze the upcoming match between ${homeTeam} and ${awayTeam} and provide the win probabilities in the following JSON format:
 {

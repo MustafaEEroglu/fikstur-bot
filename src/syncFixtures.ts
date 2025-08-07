@@ -2,6 +2,7 @@ import { SupabaseService } from './services/supabase';
 import { SerpApiService } from './services/serpapi';
 import { OpenRouterService } from './services/openrouter';
 import { LeagueConfig } from './types';
+
 class FixtureSyncService {
   private supabase: SupabaseService;
   private serpapi: SerpApiService;
@@ -30,14 +31,24 @@ class FixtureSyncService {
     ];
 
     try {
-      for (const team of teamConfigs) {
-        console.log(`Syncing fixtures for ${team.name}...`);
-        await this.syncLeagueFixtures(team);
-      }
+      // Queue ile paralel senkronizasyon
+      const syncPromises = teamConfigs.map(async (team) => {
+        console.log(`🔄 Syncing fixtures for ${team.name}...`);
+        try {
+          await this.syncLeagueFixtures(team);
+          console.log(`✅ Successfully synced fixtures for ${team.name}`);
+        } catch (error) {
+          console.error(`❌ Error syncing fixtures for ${team.name}:`, error);
+          throw error;
+        }
+      });
       
-      console.log('Fixture synchronization completed successfully!');
+      // Paralel olarak çalıştır
+      await Promise.all(syncPromises);
+      
+      console.log('🎉 Fixture synchronization completed successfully!');
     } catch (error) {
-      console.error('Error during fixture synchronization:', error);
+      console.error('❌ Error during fixture synchronization:', error);
       throw error;
     }
   }

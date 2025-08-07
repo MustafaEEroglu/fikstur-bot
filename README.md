@@ -32,9 +32,17 @@ Discord tabanlı otomatik maç fikstürü bildirim botu. Bot, belirli liglerdeki
 
 ### 🎯 AI Tahmin Entegrasyonu
 - OpenRouter API ile maç kazanma olasılıkları
-- 30 dakikalık önbellek sistemi
+- **30 dakikalık önbellek sistemi** - API çağrılarını optimize etme
 - Gerçek zamanlı oran hesaplama
 - Yüzde normalizasyonu
+- **Request Queue** - Aynı anda birden fazla API çağrısını önleme
+
+### ⚡ Performans Optimizasyonları
+- **Cache Sistemi** - Veritabanı sorgularını önbellekleme
+- **Paralel İşlem** - Birden fazla işlemi aynı anda çalıştırma
+- **Veritabanı İndeksleri** - Sorgu performansını artırma
+- **Hata Yönetimi** - Gelişmiş loglama ve hata yakalama
+- **Database View'leri** - Karmaşık sorguları optimize etme
 
 ## 🛠️ Teknoloji Yığını
 
