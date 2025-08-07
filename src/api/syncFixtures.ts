@@ -1,4 +1,4 @@
-export default async function handler(req: any, res: any) {
+export default async function handler(_req: any, res: any) {
   try {
     console.log('🔄 Starting fixture synchronization...');
     
