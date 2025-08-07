@@ -70,16 +70,16 @@ Please provide realistic percentages that add up to 100. Base your analysis on g
       const content = completion.choices?.[0]?.message?.content;
       
       if (!content) {
-        console.error('OpenRouter API: Yanıt içeriği boş');
-        throw new Error('Invalid response from OpenRouter API - content is empty');
+        console.error('❌ OpenRouter API yanıtı boş');
+        throw new Error('OpenRouter API yanıtı boş');
       }
       
       let odds: OddsResponse;
       try {
         odds = JSON.parse(content);
       } catch (parseError) {
-        console.error('OpenRouter API: JSON parse hatası - Yanıt formatı beklenenden farklı');
-        throw new Error('Invalid JSON response from OpenRouter API');
+        console.error('❌ OpenRouter API JSON parse hatası: Yanıt formatı beklenenden farklı');
+        throw new Error('OpenRouter API JSON formatı hatalı');
       }
       
       // Ensure percentages add up to 100
@@ -100,7 +100,7 @@ Please provide realistic percentages that add up to 100. Base your analysis on g
 
       return odds;
     } catch (error) {
-      console.error('Error getting match odds from OpenRouter:', error);
+      console.error('❌ OpenRouter API hatası: Maç oranları alınamadı', error);
       // Return default odds if API fails
       return {
         homeWin: 33,
