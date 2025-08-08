@@ -1,11 +1,14 @@
-import { DiscordClient } from '../src/client';
+// Load environment variables
+require('dotenv').config();
+
+const { DiscordClient } = require('../dist/client');
 
 // Global bot instance for Hobby plan optimization
-let globalClient: DiscordClient | null = null;
+let globalClient = null;
 let isStarting = false;
 let lastActivity = Date.now();
 
-export default async function handler(req: any, res: any) {
+async function handler(req, res) {
   try {
     // Update last activity for keep-alive
     lastActivity = Date.now();
@@ -97,21 +100,4 @@ export default async function handler(req: any, res: any) {
   }
 }
 
-// Keep-alive mechanism for Hobby plan
-const KEEP_ALIVE_INTERVAL = 25 * 60 * 1000; // 25 dakika (Vercel timeout 30dk)
-
-// Inactivity cleanup
-setInterval(() => {
-  const now = Date.now();
-  const inactiveTime = now - lastActivity;
-  
-  // 1 saattir activity yoksa ve bot varsa temizle
-  if (inactiveTime > 60 * 60 * 1000 && globalClient) {
-    console.log('🧹 Bot 1 saattir kullanılmadığı için temizleniyor...');
-    if (globalClient.destroy) {
-      globalClient.destroy();
-    }
-    globalClient = null;
-    isStarting = false;
-  }
-}, KEEP_ALIVE_INTERVAL);
+module.exports = handler;

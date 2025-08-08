@@ -1,11 +1,12 @@
-import { SupabaseService } from '../src/services/supabase';
+// Load environment variables
+require('dotenv').config();
 
-export default async function handler(req: any, res: any) {
+async function handler(req, res) {
   try {
     console.log('🔄 Fixture sync başlatılıyor...');
     
     // Import sync function dynamically to avoid startup issues
-    const syncModule = await import('../src/syncFixtures');
+    const syncModule = require('../dist/syncFixtures');
     const syncService = new syncModule.FixtureSyncService();
     
     await syncService.syncAllFixtures();
@@ -25,3 +26,5 @@ export default async function handler(req: any, res: any) {
     });
   }
 }
+
+module.exports = handler;
