@@ -1,7 +1,9 @@
 // Load environment variables
 require('dotenv').config();
 
-const { DiscordClient } = require('../dist/client');
+const path = require('path');
+const clientPath = path.join(__dirname, '..', 'dist', 'client.js');
+const DiscordClient = require(clientPath).default;
 
 // Global bot instance for Hobby plan optimization
 let globalClient = null;
