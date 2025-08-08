@@ -2,12 +2,6 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-console.log('🔍 Environment Debug Info:');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('DISCORD_BOT_TOKEN length:', process.env.DISCORD_BOT_TOKEN?.length || 'undefined');
-console.log('DISCORD_BOT_TOKEN first 10 chars:', process.env.DISCORD_BOT_TOKEN?.substring(0, 10) || 'undefined');
-console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
-
 export const config = {
   discord: {
     botToken: process.env.DISCORD_BOT_TOKEN || '',
@@ -30,10 +24,5 @@ export const config = {
 
 if (!config.discord.botToken || !config.discord.guildId || !config.supabase.url || !config.supabase.anonKey) {
   console.error('Missing required environment variables. Please check your .env file.');
-  console.error('Config values:');
-  console.error('- botToken length:', config.discord.botToken.length);
-  console.error('- guildId:', config.discord.guildId);
-  console.error('- supabase url:', config.supabase.url);
-  console.error('- supabase anonKey length:', config.supabase.anonKey.length);
   process.exit(1);
 }
