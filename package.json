@@ -4,6 +4,7 @@
   "description": "Discord bot for fixture notifications",
   "main": "dist/index.js",
   "scripts": {
+    "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon --watch \"src/**/*.ts\" --exec \"npx ts-node\" src/index.ts",
     "sync": "npx ts-node src/syncFixtures.ts"
