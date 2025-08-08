@@ -12,7 +12,7 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "src/$1"
+      "dest": "api/$1"
     },
     {
       "src": "/(.*)",
@@ -22,7 +22,7 @@
   "crons": [
     {
       "path": "/api/syncFixtures",
-      "schedule": "0 0 * * *"
+      "schedule": "0 2 * * *"
     }
   ]
 }

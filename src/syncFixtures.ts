@@ -3,7 +3,7 @@ import { SerpApiService } from './services/serpapi';
 import { OpenRouterService } from './services/openrouter';
 import { LeagueConfig } from './types';
 
-class FixtureSyncService {
+export class FixtureSyncService {
   private supabase: SupabaseService;
   private serpapi: SerpApiService;
   private openrouter: OpenRouterService;
