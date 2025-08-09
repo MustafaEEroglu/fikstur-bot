@@ -461,10 +461,7 @@ export class DiscordClient extends Client {
       for (const guild of guilds.values()) {
         // Try to find a general or notification channel
         const channel = guild.channels.cache.find(ch => 
-          ch.name.includes('general') || 
-          ch.name.includes('genel') || 
-          ch.name.includes('bot') ||
-          ch.name.includes('notification')
+          ch.name.includes('fikstur')
         );
 
         if (channel && channel.isTextBased()) {
