@@ -85,6 +85,8 @@ export class SerpApiService {
         return null;
       }
       
+      console.log('🔍 parseGameDate: Processing:', dateStr);
+      
       const today = new Date();
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
@@ -123,14 +125,22 @@ export class SerpApiService {
         return today;
       }
       
-      // Handle "today HH:XX" format (AM/PM olmadan)
-      const todayTimeMatch24 = dateStr.toLowerCase().match(/today\s+(\d{1,2}):(\d{2})/i);
+      // Handle "today HH:XX" format (AM/PM olmadan - 24 saat) - HEM VIRGÜLLÜ HEM VİRGÜLSÜZ
+      const todayTimeMatch24 = dateStr.toLowerCase().match(/today[,\s]+(\d{1,2}):(\d{2})(?!\s*(am|pm))/i);
       if (todayTimeMatch24) {
         const hour = parseInt(todayTimeMatch24[1]);
         const minute = parseInt(todayTimeMatch24[2]);
         
-        today.setHours(hour, minute, 0, 0);
-        return today;
+        console.log(`🔍 parseGameDate: Found 24h format - hour: ${hour}, minute: ${minute}`);
+        
+        // 24 saat formatında geçerli saat kontrolü
+        if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+          today.setHours(hour, minute, 0, 0);
+          console.log(`✅ parseGameDate: TODAY 24h - ${hour}:${minute} -> ${today.toISOString()}`);
+          return today;
+        } else {
+          console.log(`❌ parseGameDate: Invalid 24h time - ${hour}:${minute}`);
+        }
       }
       
       // Handle sadece "today" format
@@ -139,7 +149,7 @@ export class SerpApiService {
         return today;
       }
       
-      // 2. Handle "tomorrow, HH:MM XM" format
+      // 2. Handle "tomorrow, HH:MM XM" format (virgüllü)
       const tomorrowTimeMatch = dateStr.toLowerCase().match(/tomorrow,\s*(\d{1,2}):(\d{2})\s*(am|pm)/i);
       if (tomorrowTimeMatch) {
         let hour = parseInt(tomorrowTimeMatch[1]);
@@ -154,6 +164,41 @@ export class SerpApiService {
         
         tomorrow.setHours(hour, minute, 0, 0);
         return tomorrow;
+      }
+      
+      // Handle "tomorrow HH:MM XM" format (virgülsüz)
+      const tomorrowTimeMatchNoComma = dateStr.toLowerCase().match(/tomorrow\s+(\d{1,2}):(\d{2})\s*(am|pm)/i);
+      if (tomorrowTimeMatchNoComma) {
+        let hour = parseInt(tomorrowTimeMatchNoComma[1]);
+        const minute = parseInt(tomorrowTimeMatchNoComma[2]);
+        const period = tomorrowTimeMatchNoComma[3].toUpperCase();
+        
+        if (period === 'PM' && hour !== 12) {
+          hour += 12;
+        } else if (period === 'AM' && hour === 12) {
+          hour = 0;
+        }
+        
+        tomorrow.setHours(hour, minute, 0, 0);
+        return tomorrow;
+      }
+      
+      // Handle "tomorrow HH:XX" format (AM/PM olmadan - 24 saat) - HEM VIRGÜLLÜ HEM VİRGÜLSÜZ  
+      const tomorrowTimeMatch24 = dateStr.toLowerCase().match(/tomorrow[,\s]+(\d{1,2}):(\d{2})(?!\s*(am|pm))/i);
+      if (tomorrowTimeMatch24) {
+        const hour = parseInt(tomorrowTimeMatch24[1]);
+        const minute = parseInt(tomorrowTimeMatch24[2]);
+        
+        console.log(`🔍 parseGameDate: Found TOMORROW 24h format - hour: ${hour}, minute: ${minute}`);
+        
+        // 24 saat formatında geçerli saat kontrolü
+        if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+          tomorrow.setHours(hour, minute, 0, 0);
+          console.log(`✅ parseGameDate: TOMORROW 24h - ${hour}:${minute} -> ${tomorrow.toISOString()}`);
+          return tomorrow;
+        } else {
+          console.log(`❌ parseGameDate: Invalid 24h time for tomorrow - ${hour}:${minute}`);
+        }
       }
       
       // 3. Handle simple "today" and "tomorrow"
@@ -412,67 +457,102 @@ export class SerpApiService {
       const homeTeam = game.teams[0];
       const awayTeam = game.teams[1];
 
-      // Parse date and time
-      const gameDate = this.parseGameDate(game.date);
-      if (!gameDate) return null;
+      // 🔄 COMBINATION LOGIC: Date + Time fields
+      console.log('🔍 parseGame: Input data:', { date: game.date, time: game.time });
+      
+      let finalDate: Date;
+      let finalTime: string;
 
-      // Add time if available, otherwise use default
-      let time = game.time || DEFAULTS.MATCH_TIME; // Default time if not specified
+      // Check if date field already contains time
+      const dateContainsTime = game.date && !!game.date.toLowerCase().match(/(today|tomorrow)[,\s]+\d{1,2}:\d{2}/i);
       
-      console.log('🔍 parseGame: Original time from SerpApi:', time);
-      
-      // Convert 12-hour format to 24-hour format
-      if (time.includes('PM') || time.includes('pm')) {
-        const cleanTime = time.replace(' PM', '').replace(' pm', '').replace('P.M.', '').replace('p.m.', '');
-        const [hour, minute] = cleanTime.split(':');
-        let hour24 = parseInt(hour);
-        if (hour24 !== 12) {
-          hour24 += 12;
+      if (dateContainsTime) {
+        // Use time from date field, ignore separate time field
+        console.log('📅 parseGame: Date contains time, using parseGameDate');
+        const parsedDate = this.parseGameDate(game.date);
+        if (!parsedDate) return null;
+        
+        finalDate = parsedDate;
+        finalTime = `${parsedDate.getHours().toString().padStart(2, '0')}:${parsedDate.getMinutes().toString().padStart(2, '0')}`;
+        
+      } else {
+        // Use separate time field with basic date
+        console.log('📅 parseGame: Using combination of date + separate time');
+        
+        // Get base date (without time)
+        const baseDate = this.parseGameDate(game.date);
+        if (!baseDate) return null;
+        
+        // Process separate time field
+        let processedTime = game.time || DEFAULTS.MATCH_TIME;
+        console.log('⏰ parseGame: Processing separate time:', processedTime);
+        
+        // Convert 12-hour format to 24-hour format
+        if (processedTime.includes('PM') || processedTime.includes('pm')) {
+          const cleanTime = processedTime.replace(/\s*(PM|pm|P\.M\.|p\.m\.)/g, '');
+          const [hour, minute] = cleanTime.split(':');
+          let hour24 = parseInt(hour);
+          if (hour24 !== 12) {
+            hour24 += 12;
+          }
+          processedTime = `${hour24.toString().padStart(2, '0')}:${minute}`;
+        } else if (processedTime.includes('AM') || processedTime.includes('am')) {
+          const cleanTime = processedTime.replace(/\s*(AM|am|A\.M\.|a\.m\.)/g, '');
+          const [hour, minute] = cleanTime.split(':');
+          let hour24 = parseInt(hour);
+          if (hour24 === 12) {
+            hour24 = 0;
+          }
+          processedTime = `${hour24.toString().padStart(2, '0')}:${minute}`;
         }
-        time = `${hour24.toString().padStart(2, '0')}:${minute}`;
-      } else if (time.includes('AM') || time.includes('am')) {
-        const cleanTime = time.replace(' AM', '').replace(' am').replace('A.M.', '').replace('a.m.', '');
-        const [hour, minute] = cleanTime.split(':');
-        let hour24 = parseInt(hour);
-        if (hour24 === 12) {
-          hour24 = 0;
+        
+        // Validate and format time
+        const timeParts = processedTime.split(':');
+        if (timeParts.length === 2) {
+          const hour = parseInt(timeParts[0]);
+          const minute = parseInt(timeParts[1]);
+          if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+            finalTime = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+            baseDate.setHours(hour, minute, 0, 0);
+            finalDate = baseDate;
+          } else {
+            console.log('❌ parseGame: Invalid time format, using default');
+            finalTime = DEFAULTS.MATCH_TIME;
+            finalDate = baseDate;
+          }
+        } else {
+          console.log('❌ parseGame: Invalid time format, using default');
+          finalTime = DEFAULTS.MATCH_TIME;
+          finalDate = baseDate;
         }
-        time = `${hour24.toString().padStart(2, '0')}:${minute}`;
       }
       
-      // Ensure time is in HH:MM format
-      const timeParts = time.split(':');
-      if (timeParts.length === 2) {
-        const hour = parseInt(timeParts[0]);
-        const minute = parseInt(timeParts[1]);
-        if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
-          time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        }
-      }
-      
-      console.log('🔍 parseGame: Processed time:', time);
+      console.log('✅ parseGame: Final result:', { 
+        finalDate: finalDate.toISOString(), 
+        finalTime: finalTime 
+      });
       
       // TIMEZONE CORRECTION: Google often shows UTC or wrong timezone times
       // Turkish Super League and Turkish teams typically play at 19:00, 20:00, 21:00, 21:30
       // Conference League typically at 21:00, 21:45
-      let correctedTime = time;
+      let correctedTime = finalTime;
       
       // If time looks suspicious (like 09:30 for Turkish football), correct it
-      if (time === '09:30' && (homeTeam.name.includes('Galatasaray') || awayTeam.name.includes('Galatasaray') || 
+      if (finalTime === '09:30' && (homeTeam.name.includes('Galatasaray') || awayTeam.name.includes('Galatasaray') || 
                                homeTeam.name.includes('Gaziantep') || awayTeam.name.includes('Gaziantep') ||
                                league.toLowerCase().includes('süper') || league.toLowerCase().includes('turkish'))) {
         correctedTime = '21:30';
-        console.log('⚠️ parseGame: Corrected Turkish Super League time from', time, 'to', correctedTime);
+        console.log('⚠️ parseGame: Corrected Turkish Super League time from', finalTime, 'to', correctedTime);
       }
       
       // Conference League matches typically at 21:00 or 21:45
-      if ((time === '18:45' || time === '19:00') && 
+      if ((finalTime === '18:45' || finalTime === '19:00') && 
           (league.toLowerCase().includes('conference') || league.toLowerCase().includes('uefa'))) {
         correctedTime = '21:45';
-        console.log('⚠️ parseGame: Corrected Conference League time from', time, 'to', correctedTime);
+        console.log('⚠️ parseGame: Corrected Conference League time from', finalTime, 'to', correctedTime);
       }
       
-      const formattedDate = `${gameDate.getFullYear()}-${String(gameDate.getMonth() + 1).padStart(2, '0')}-${String(gameDate.getDate()).padStart(2, '0')}T${correctedTime}:00+03:00`;
+      const formattedDate = `${finalDate.getFullYear()}-${String(finalDate.getMonth() + 1).padStart(2, '0')}-${String(finalDate.getDate()).padStart(2, '0')}T${correctedTime}:00+03:00`;
 
       console.log('✅ parseGame: Final formatted date:', formattedDate);
 
@@ -543,36 +623,82 @@ export class SerpApiService {
         return null;
       }
 
-      const gameDate = this.parseGameDate(spotlight.date);
-      if (!gameDate) {
-        return null;
-      }
+      // 🔄 COMBINATION LOGIC for Spotlight: Date + Time fields
+      console.log('🔍 parseSpotlightGame: Input data:', { date: spotlight.date, time: spotlight.time });
+      
+      let finalDate: Date;
+      let finalTime: string;
 
-      // Parse time if available
-      let time = spotlight.time || DEFAULTS.MATCH_TIME;
-
-      // Handle time formats like "7:00 PM"
-      if (time && typeof time === 'string') {
-        const timeMatch = time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-        if (timeMatch) {
-          let hour = parseInt(timeMatch[1]);
-          const minute = timeMatch[2];
-          const period = timeMatch[3].toUpperCase();
-          
-          if (period === 'PM' && hour !== 12) {
-            hour += 12;
-          } else if (period === 'AM' && hour === 12) {
-            hour = 0;
+      // Check if date field already contains time
+      const dateContainsTime = spotlight.date && !!spotlight.date.toLowerCase().match(/(today|tomorrow)[,\s]+\d{1,2}:\d{2}/i);
+      
+      if (dateContainsTime) {
+        // Use time from date field, ignore separate time field
+        console.log('📅 parseSpotlightGame: Date contains time, using parseGameDate');
+        const parsedDate = this.parseGameDate(spotlight.date);
+        if (!parsedDate) return null;
+        
+        finalDate = parsedDate;
+        finalTime = `${parsedDate.getHours().toString().padStart(2, '0')}:${parsedDate.getMinutes().toString().padStart(2, '0')}`;
+        
+      } else {
+        // Use separate time field with basic date
+        console.log('📅 parseSpotlightGame: Using combination of date + separate time');
+        
+        // Get base date (without time)
+        const baseDate = this.parseGameDate(spotlight.date);
+        if (!baseDate) return null;
+        
+        // Process separate time field
+        let processedTime = spotlight.time || DEFAULTS.MATCH_TIME;
+        console.log('⏰ parseSpotlightGame: Processing separate time:', processedTime);
+        
+        // Handle time formats like "7:00 PM"
+        if (processedTime && typeof processedTime === 'string') {
+          const timeMatch = processedTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+          if (timeMatch) {
+            let hour = parseInt(timeMatch[1]);
+            const minute = timeMatch[2];
+            const period = timeMatch[3].toUpperCase();
+            
+            if (period === 'PM' && hour !== 12) {
+              hour += 12;
+            } else if (period === 'AM' && hour === 12) {
+              hour = 0;
+            }
+            
+            processedTime = `${hour.toString().padStart(2, '0')}:${minute}`;
           }
-          
-          time = `${hour.toString().padStart(2, '0')}:${minute}`;
+        }
+        
+        // Validate and format time
+        const timeParts = processedTime.split(':');
+        if (timeParts.length === 2) {
+          const hour = parseInt(timeParts[0]);
+          const minute = parseInt(timeParts[1]);
+          if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+            finalTime = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+            baseDate.setHours(hour, minute, 0, 0);
+            finalDate = baseDate;
+          } else {
+            console.log('❌ parseSpotlightGame: Invalid time format, using default');
+            finalTime = DEFAULTS.MATCH_TIME;
+            finalDate = baseDate;
+          }
+        } else {
+          console.log('❌ parseSpotlightGame: Invalid time format, using default');
+          finalTime = DEFAULTS.MATCH_TIME;
+          finalDate = baseDate;
         }
       }
+      
+      console.log('✅ parseSpotlightGame: Final result:', { 
+        finalDate: finalDate.toISOString(), 
+        finalTime: finalTime 
+      });
 
-      // Set date with time
-      const [hour, minute] = time.split(':').map(Number);
-      gameDate.setHours(hour, minute, 0, 0);
-      const formattedDate = gameDate.toISOString();
+      // Set the final date and format
+      const formattedDate = finalDate.toISOString();
 
       return {
         id: 0,
@@ -589,7 +715,7 @@ export class SerpApiService {
           short_name: awayTeam.name.substring(0, 3).toUpperCase(),
         },
         date: formattedDate,
-        time: time,
+        time: finalTime,
         league: spotlight.league || league,
         status: 'scheduled',
         googleLink: '',
