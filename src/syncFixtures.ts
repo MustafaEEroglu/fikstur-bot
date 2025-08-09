@@ -133,3 +133,20 @@ export class FixtureSyncService {
     return dbTeam;
   }
 }
+
+// Main function - Sync çalıştırıldığında bu çalışacak
+async function main() {
+  const syncService = new FixtureSyncService();
+  try {
+    await syncService.syncAllFixtures();
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Sync failed:', error);
+    process.exit(1);
+  }
+}
+
+// Eğer bu dosya doğrudan çalıştırılırsa main function'ı çağır
+if (require.main === module) {
+  main();
+}

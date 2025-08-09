@@ -422,13 +422,26 @@ export class SerpApiService {
 
   private parseGame(game: any, league: string): Match | null {
     try {
+      // 🔍 DETAYLI DEBUG LOGGING - HER MAÇ İÇİN
+      console.log('\n🏟️ ================================');
+      console.log('🔍 PARSING GAME:', {
+        homeTeam: game.teams?.[0]?.name || 'Unknown',
+        awayTeam: game.teams?.[1]?.name || 'Unknown',
+        date: game.date,
+        time: game.time,
+        league: league
+      });
+
       if (!game.teams || game.teams.length !== 2) {
+        console.log('❌ SKIPPED: Invalid teams data');
         return null;
       }
 
       // ⚠️ ERTELENEN MAÇ FİLTRELEME
       const dateStr = game.date?.toLowerCase() || '';
       const timeStr = game.time?.toLowerCase() || '';
+      
+      console.log('🔍 CHECKING POSTPONED:', { dateStr, timeStr });
       
       // Ertelenen maç kalıpları
       const postponedPatterns = [
@@ -451,8 +464,11 @@ export class SerpApiService {
       if (isPostponed) {
         console.log(`⏸️ SKIPPING POSTPONED MATCH: ${game.teams[0].name} vs ${game.teams[1].name}`);
         console.log(`   📅 Date: "${game.date}", ⏰ Time: "${game.time}"`);
+        console.log(`   🚫 Matched pattern: ${postponedPatterns.find(p => dateStr.includes(p) || timeStr.includes(p))}`);
         return null;
       }
+
+      console.log('✅ POSTPONED CHECK PASSED - Proceeding with match processing');
 
       const homeTeam = game.teams[0];
       const awayTeam = game.teams[1];
@@ -556,7 +572,7 @@ export class SerpApiService {
 
       console.log('✅ parseGame: Final formatted date:', formattedDate);
 
-      return {
+      const finalMatch = {
         id: 0,
         homeTeam: {
           id: 0,
@@ -577,6 +593,18 @@ export class SerpApiService {
         googleLink: game.video_highlights?.link || '',
         broadcastChannel: game.venue || '',
       };
+
+      // 🎯 FINAL RESULT LOGGING
+      console.log('🎯 MATCH WILL BE ADDED TO DATABASE:');
+      console.log('   🏠 Home:', finalMatch.homeTeam.name);
+      console.log('   🏃 Away:', finalMatch.awayTeam.name);
+      console.log('   📅 Final Date:', finalMatch.date);
+      console.log('   ⏰ Final Time:', finalMatch.time);
+      console.log('   🏆 League:', finalMatch.league);
+      console.log('   📊 Status:', finalMatch.status);
+      console.log('🏟️ ================================\n');
+
+      return finalMatch;
     } catch (error) {
       console.error('Error parsing game:', error);
       return null;
