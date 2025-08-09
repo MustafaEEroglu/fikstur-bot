@@ -96,15 +96,20 @@ export class DiscordClient extends Client {
 
   private async checkForMatches() {
     try {
+      console.log('🔍 Checking for matches...');
       const matches = await this.supabase.getMatchesForNotification();
+      console.log(`📊 Found ${matches.length} matches for notification`);
       
       if (matches.length === 0) return;
       
+      console.log(`🔍 Looking for channel: ${config.discord.fixtureChannelId}`);
       const channel = this.channels.cache.get(config.discord.fixtureChannelId) as any;
       if (!channel) {
-        console.error(ERROR_MESSAGES.CHANNEL_NOT_FOUND);
+        console.error(`❌ Channel not found: ${config.discord.fixtureChannelId}`);
+        console.error(`Available channels: ${this.channels.cache.size} total channels`);
         return;
       }
+      console.log(`✅ Channel found: ${channel.name}`);
 
       // Paralel işlem için Promise.all kullan
       await Promise.all(matches.map(async (match) => {
