@@ -1,4 +1,10 @@
 import { DiscordClient } from './client';
+import { app, PORT } from './healthcheck';
+
+// HTTP server başlat (Render için)
+app.listen(PORT, () => {
+  console.log(`🌐 HTTP server çalışıyor: http://localhost:${PORT}`);
+});
 
 // Create and start the Discord bot
 const client = new DiscordClient();
