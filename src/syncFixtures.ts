@@ -22,8 +22,10 @@ export class FixtureSyncService {
       { name: 'Fenerbahçe', teams: ['Fenerbahçe'], serpApiQuery: 'Fenerbahçe' },
       { name: 'Beşiktaş', teams: ['Beşiktaş'], serpApiQuery: 'Beşiktaş' },
       { name: 'Liverpool', teams: ['Liverpool'], serpApiQuery: 'Liverpool' },
+      { name: 'Chelsea', teams: ['Chelsea'], serpApiQuery: 'Chelsea' },
       { name: 'Arsenal', teams: ['Arsenal'], serpApiQuery: 'Arsenal' },
       { name: 'Manchester United', teams: ['Manchester United'], serpApiQuery: 'Manchester United' },
+      { name: 'Manchester City', teams: ['Manchester City'], serpApiQuery: 'Manchester City' },
       { name: 'Real Madrid', teams: ['Real Madrid'], serpApiQuery: 'Real Madrid' },
       { name: 'Barcelona', teams: ['Barcelona'], serpApiQuery: 'Barcelona' },
     ];
@@ -130,18 +132,4 @@ export class FixtureSyncService {
 
     return dbTeam;
   }
-}
-
-// For local testing
-if (require.main === module) {
-  const syncService = new FixtureSyncService();
-  syncService.syncAllFixtures()
-    .then(() => {
-      console.log('Sync completed');
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('Sync failed:', error);
-      process.exit(1);
-    });
 }
