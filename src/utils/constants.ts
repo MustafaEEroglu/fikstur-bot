@@ -5,6 +5,18 @@ export const INTERVALS = {
   TEST_ROOM_CLEANUP: 5 * 60 * 1000,  // 5 dakika
 } as const;
 
+// Modern Color Palette
+export const COLORS = {
+  PRIMARY: 0x00D4AA,      // Modern teal
+  SUCCESS: 0x00E676,      // Bright green
+  ERROR: 0xFF5252,        // Material red
+  WARNING: 0xFFAB00,      // Amber
+  INFO: 0x2196F3,         // Blue
+  PURPLE: 0x9C27B0,       // Purple
+  ORANGE: 0xFF9800,       // Orange
+  DARK: 0x37474F,         // Dark grey
+} as const;
+
 // Cache timeouts
 export const CACHE_TIMEOUTS = {
   ROLES: 10 * 60 * 1000,     // 10 dakika

@@ -5,7 +5,7 @@ import { OpenRouterService } from './services/openrouter';
 import { FixtureSyncService } from './syncFixtures';
 import { Match } from './types';
 import { format } from 'date-fns';
-import { INTERVALS, TURKISH_TEAMS, ERROR_MESSAGES } from './utils/constants';
+import { INTERVALS, COLORS, TURKISH_TEAMS, ERROR_MESSAGES } from './utils/constants';
 
 export class DiscordClient extends Client {
   public commands: Collection<string, any> = new Collection();
@@ -58,8 +58,9 @@ export class DiscordClient extends Client {
   }
 
   private setupEventHandlers() {
-    this.on('ready', () => {
+    this.on('ready', async () => {
       console.log(`Logged in as ${this.user?.tag}!`);
+      await this.setDynamicStatus();
       this.scheduleTasks();
       this.startAutoSync();
     });
@@ -235,7 +236,7 @@ export class DiscordClient extends Client {
 
       const embed = new EmbedBuilder()
         .setTitle('📅 Haftalık Maç Fikstürü')
-        .setColor('#0099ff')
+        .setColor(COLORS.PRIMARY)
         .setDescription('Gelecek 7 gündeki maçlar')
         .setTimestamp();
 
@@ -247,6 +248,7 @@ export class DiscordClient extends Client {
       }
 
       embed.setDescription(description);
+      embed.setFooter({ text: '⚽ Barbar Botu • Türk takımlarını destekliyoruz!', iconURL: this.user?.displayAvatarURL() });
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
       console.error('Error handling week command:', error);
@@ -270,7 +272,7 @@ export class DiscordClient extends Client {
       const odds = await this.openrouter.getMatchOdds(match.homeTeam.name, match.awayTeam.name);
       
       const embed = new EmbedBuilder()
-        .setColor('#0099ff')
+        .setColor(COLORS.INFO)
         .setTitle(`⚽ ${match.homeTeam.name} vs ${match.awayTeam.name}`)
         .setThumbnail(match.homeTeam.logo || '')
         .addFields(
@@ -297,7 +299,7 @@ export class DiscordClient extends Client {
 
   private createErrorEmbed(message: string): EmbedBuilder {
     return new EmbedBuilder()
-      .setColor('#ff0000')
+      .setColor(COLORS.ERROR)
       .setTitle('⚠️ Hata')
       .setDescription(message)
       .setTimestamp();
@@ -398,7 +400,7 @@ export class DiscordClient extends Client {
       }
       
       const embed = new EmbedBuilder()
-        .setColor('#00ff00')
+        .setColor(COLORS.SUCCESS)
         .setTitle('🏟️ MAÇ ODASI HAZIR!')
         .setDescription(`**${match.homeTeam.name} vs ${match.awayTeam.name}**`)
         .addFields(
@@ -418,6 +420,47 @@ export class DiscordClient extends Client {
     } catch (error) {
       console.error('Error creating voice room notification:', error);
       return this.createErrorEmbed(ERROR_MESSAGES.VOICE_ROOM_ERROR);
+    }
+  }
+
+  private async setDynamicStatus() {
+    try {
+      const statusMessages = [
+        '⚽ Maçları takip ediyor',
+        '📅 Günlük fikstürleri kontrol ediyor',
+        '🏆 Fikstürleri senkronize ediyor',
+        '🔔 Maç bildirimlerini hazırlıyor',
+        '⭐ Türk takımlarını destekliyor',
+        '📊 Maç istatistiklerini analiz ediyor'
+      ];
+
+      // Rastgele status seç
+      const randomStatus = statusMessages[Math.floor(Math.random() * statusMessages.length)];
+      
+      this.user?.setPresence({
+        activities: [{
+          name: randomStatus,
+          type: 3 // WATCHING
+        }],
+        status: 'online'
+      });
+
+      console.log(`🎯 Bot status set: ${randomStatus}`);
+      
+      // Her 10 dakikada status güncelle
+      setInterval(async () => {
+        const newRandomStatus = statusMessages[Math.floor(Math.random() * statusMessages.length)];
+        this.user?.setPresence({
+          activities: [{
+            name: newRandomStatus,
+            type: 3
+          }],
+          status: 'online'
+        });
+      }, 10 * 60 * 1000);
+
+    } catch (error) {
+      console.error('Error setting dynamic status:', error);
     }
   }
 
@@ -466,7 +509,7 @@ export class DiscordClient extends Client {
 
         if (channel && channel.isTextBased()) {
           const embed = new EmbedBuilder()
-            .setColor(success ? 0x00ff00 : 0xff0000)
+            .setColor(success ? COLORS.SUCCESS : COLORS.ERROR)
             .setTitle(success ? '✅ Otomatik Fikstür Güncellemesi' : '❌ Fikstür Güncelleme Hatası')
             .setDescription(success 
               ? `Tüm takım fikstürleri başarıyla güncellendi.\n⏱️ Süre: ${duration} saniye`
