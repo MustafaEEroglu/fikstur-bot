@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Collection, REST, Routes, SlashCommandBuilde
 import { config } from './utils/config';
 import { SupabaseService } from './services/supabase';
 import { OpenRouterService } from './services/openrouter';
+import { FixtureSyncService } from './syncFixtures';
 import { Match } from './types';
 import { format } from 'date-fns';
 import { INTERVALS, TURKISH_TEAMS, ERROR_MESSAGES } from './utils/constants';
@@ -10,7 +11,9 @@ export class DiscordClient extends Client {
   public commands: Collection<string, any> = new Collection();
   public supabase: SupabaseService;
   public openrouter: OpenRouterService;
+  public fixtureSyncService: FixtureSyncService;
   private voiceChannels: Set<string> = new Set();
+  private syncInterval?: NodeJS.Timeout;
 
   constructor() {
     super({
@@ -25,6 +28,7 @@ export class DiscordClient extends Client {
 
     this.supabase = new SupabaseService();
     this.openrouter = new OpenRouterService();
+    this.fixtureSyncService = new FixtureSyncService();
     this.setupCommands();
     this.setupEventHandlers();
   }
@@ -57,6 +61,7 @@ export class DiscordClient extends Client {
     this.on('ready', () => {
       console.log(`Logged in as ${this.user?.tag}!`);
       this.scheduleTasks();
+      this.startAutoSync();
     });
 
     this.on('interactionCreate', async (interaction) => {
@@ -414,6 +419,79 @@ export class DiscordClient extends Client {
       console.error('Error creating voice room notification:', error);
       return this.createErrorEmbed(ERROR_MESSAGES.VOICE_ROOM_ERROR);
     }
+  }
+
+  private async startAutoSync() {
+    console.log('🔄 Starting automatic fixture sync service...');
+    
+    // Initial sync
+    await this.performAutoSync();
+    
+    // Schedule sync every 7 days (604,800,000 ms)
+    this.syncInterval = setInterval(async () => {
+      await this.performAutoSync();
+    }, 7 * 24 * 60 * 60 * 1000);
+    
+    console.log('✅ Auto-sync scheduled every 7 days');
+  }
+
+  private async performAutoSync() {
+    try {
+      console.log('🔄 Starting automatic fixture synchronization...');
+      const startTime = Date.now();
+      
+      await this.fixtureSyncService.syncAllFixtures();
+      
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.log(`✅ Automatic sync completed in ${duration}s`);
+      
+      // Send notification to general channel if available
+      await this.sendSyncNotification(true, duration);
+      
+    } catch (error) {
+      console.error('❌ Automatic sync failed:', error);
+      await this.sendSyncNotification(false, '0', error);
+    }
+  }
+
+  private async sendSyncNotification(success: boolean, duration: string, error?: any) {
+    try {
+      const guilds = this.guilds.cache;
+      
+      for (const guild of guilds.values()) {
+        // Try to find a general or notification channel
+        const channel = guild.channels.cache.find(ch => 
+          ch.name.includes('general') || 
+          ch.name.includes('genel') || 
+          ch.name.includes('bot') ||
+          ch.name.includes('notification')
+        );
+
+        if (channel && channel.isTextBased()) {
+          const embed = new EmbedBuilder()
+            .setColor(success ? 0x00ff00 : 0xff0000)
+            .setTitle(success ? '✅ Otomatik Fikstür Güncellemesi' : '❌ Fikstür Güncelleme Hatası')
+            .setDescription(success 
+              ? `Tüm takım fikstürleri başarıyla güncellendi.\n⏱️ Süre: ${duration} saniye`
+              : `Fikstür güncellemesi sırasında hata oluştu.\n\`\`\`${error?.message || 'Bilinmeyen hata'}\`\`\``
+            )
+            .setTimestamp();
+
+          await channel.send({ embeds: [embed] });
+          break; // Only send to first found channel per guild
+        }
+      }
+    } catch (notificationError) {
+      console.error('Failed to send sync notification:', notificationError);
+    }
+  }
+
+  stop() {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+      console.log('🛑 Auto-sync stopped');
+    }
+    this.destroy();
   }
 
   async start() {
