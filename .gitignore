@@ -53,14 +53,8 @@ temp/
 package-lock.json
 yarn.lock
 
-# Vercel
-.vercel
-
 # TypeScript
 *.tsbuildinfo
 
 # Testing
 .jest-cache/
-
-# Deployment
-deploy/

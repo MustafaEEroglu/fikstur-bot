@@ -14,8 +14,8 @@ export class OpenRouterService {
       baseURL: "https://openrouter.ai/api/v1",
       apiKey: config.openrouter.apiKey,
       defaultHeaders: {
-        "HTTP-Referer": "https://fikstur-bot.vercel.app", // Replace with your app URL
-        "X-Title": "Fikstur Discord Bot", // Replace with your app name
+        "HTTP-Referer": "https://github.com/MustafaEEroglu/fikstur-bot", // GitHub repository URL
+        "X-Title": "Fikstur Discord Bot", // App name
       },
     });
   }

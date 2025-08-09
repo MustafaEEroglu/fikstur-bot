@@ -212,31 +212,6 @@ export class SupabaseService {
     this.rolesCache = null;
   }
 
-  async updateMatchWithEventId(matchId: number, eventId: string): Promise<void> {
-    const { error } = await this.adminClient
-      .from('matches')
-      .update({ event_id: eventId })
-      .eq('id', matchId);
-
-    if (error) throw new Error(`Error updating match with event ID: ${error.message}`);
-  }
-
-  async createEvent(matchId: number, discordEventId: string): Promise<any> {
-    const { data, error } = await this.adminClient
-      .from('events')
-      .insert({
-        match_id: matchId,
-        discord_event_id: discordEventId,
-      })
-      .select()
-      .single();
-
-    if (error) throw new Error(`Error creating event: ${error.message}`);
-    return data;
-  }
-
-
-
   // Role operations
   async getRoles(): Promise<DiscordRole[]> {
     // Check cache first
@@ -246,8 +221,8 @@ export class SupabaseService {
 
     // Fetch from database if not in cache or cache expired
     const { data, error } = await this.client
-      .from('roles')
-      .select('id, name, team_id'); // Use team_id instead of teamId
+      .from('discord_roles')
+      .select('id, name, team_id'); // Updated table name
 
     if (error) throw new Error(`Error fetching roles: ${error.message}`);
     
@@ -267,7 +242,7 @@ export class SupabaseService {
 
   async getBarbarRole(): Promise<DiscordRole | null> {
     const { data, error } = await this.client
-      .from('roles')
+      .from('discord_roles')
       .select('id, name, team_id')
       .eq('name', 'barbarlar')
       .single();

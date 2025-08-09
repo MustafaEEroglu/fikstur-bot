@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Collection, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, VoiceChannel, GuildScheduledEvent, GuildScheduledEventPrivacyLevel, GuildScheduledEventEntityType } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, VoiceChannel } from 'discord.js';
 import { config } from './utils/config';
 import { SupabaseService } from './services/supabase';
 import { OpenRouterService } from './services/openrouter';
@@ -6,20 +6,6 @@ import { Match } from './types';
 import { format } from 'date-fns';
 import { testCommands, handleTestCommand } from './testCommands';
 import { INTERVALS, TURKISH_TEAMS, ERROR_MESSAGES } from './utils/constants';
-
-// Yardımcı fonksiyonlar
-function getEntityTypeString(entityType: GuildScheduledEventEntityType): string {
-  switch (entityType) {
-    case GuildScheduledEventEntityType.StageInstance:
-      return 'Stage Instance';
-    case GuildScheduledEventEntityType.Voice:
-      return 'Voice';
-    case GuildScheduledEventEntityType.External:
-      return 'External';
-    default:
-      return 'Unknown';
-  }
-}
 
 export class DiscordClient extends Client {
   public commands: Collection<string, any> = new Collection();
@@ -194,16 +180,6 @@ export class DiscordClient extends Client {
       const embed = await this.createVoiceRoomNotification(firstMatch);
       await channel.send({ embeds: [embed] });
 
-      // Create Discord scheduled event for the voice channel
-      try {
-        const event = await this.createGuildEventWithRetry(firstMatch, channel);
-        if (event) {
-          console.log(`✅ Discord etkinliği oluşturuldu: ${firstMatch.homeTeam.name} vs ${firstMatch.awayTeam.name}`);
-        }
-      } catch (error) {
-        console.error('❌ Discord etkinliği oluşturulamadı:', error);
-      }
-
       // Tüm maçlar için voice_room_created durumunu güncelle
       await Promise.all(matches.map(async (match) => {
         try {
@@ -213,9 +189,9 @@ export class DiscordClient extends Client {
         }
       }));
 
-      // Schedule room cleanup (3 hours after the first match time)
+      // Schedule room cleanup (2 hours after the first match time)
       const cleanupTime = new Date(firstMatch.date);
-      cleanupTime.setHours(cleanupTime.getHours() + 3);
+      cleanupTime.setHours(cleanupTime.getHours() + 2);
       
       const cleanupTimeout = cleanupTime.getTime() - Date.now();
       if (cleanupTimeout > 0) {
@@ -443,100 +419,6 @@ export class DiscordClient extends Client {
       return this.createErrorEmbed(ERROR_MESSAGES.VOICE_ROOM_ERROR);
     }
   }
-
-  private async createEventDescription(match: Match): Promise<string> {
-    const matchTime = format(new Date(match.date), 'dd.MM.yyyy HH:mm');
-    
-    try {
-      const odds = await this.openrouter.getMatchOdds(match.homeTeam.name, match.awayTeam.name);
-      const role = await this.getRoleForMatch(match);
-      
-      return `🏟️ **${match.league}**
-
-⚽ **Maç**: ${match.homeTeam.name} vs ${match.awayTeam.name}
-📅 **Tarih**: ${matchTime}
-📺 **Yayın**: ${match.broadcastChannel || 'Bilinmiyor'}
-🎲 **Kazanma Oranları**:
-   🔴 ${match.homeTeam.name}: ${odds.homeWin}%
-   🔵 ${match.awayTeam.name}: ${odds.awayWin}%
-   🤝 Beraberlik: ${odds.draw}%
-
-🔔 **Bildirim**: ${role || '🚨'} Maç başlıyor!
-
-Odaya katılarak maçı canlı takip edebilirsiniz!`;
-    } catch (error) {
-      console.error('Error creating event description:', error);
-      return `🏟️ **${match.league}**
-
-⚽ **Maç**: ${match.homeTeam.name} vs ${match.awayTeam.name}
-📅 **Tarih**: ${matchTime}
-📺 **Yayın**: ${match.broadcastChannel || 'Bilinmiyor'}
-
-🔔 **Bildirim**: Maç başlıyor!
-
-Odaya katılarak maçı canlı takip edebilirsiniz!`;
-    }
-  }
-
-  private async createGuildEvent(match: Match, channel: VoiceChannel): Promise<GuildScheduledEvent> {
-    const guild = channel.guild;
-    
-    console.log(`🎭 Event oluşturma detayları:`);
-    console.log(`   - Maç: ${match.homeTeam.name} vs ${match.awayTeam.name}`);
-    console.log(`   - Event adı: ${match.homeTeam.name} - ${match.awayTeam.name}`);
-    console.log(`   - Event tipi: Voice`);
-    console.log(`   - Lokasyon (kanal ID): ${channel.id}`);
-    console.log(`   - Başlangıç zamanı: ${match.date}`);
-    console.log(`   - Gizlilik: GuildOnly`);
-    
-    try {
-      console.log(`🚀 Discord API'ye event oluşturma isteği gönderiliyor...`);
-      const event = await guild.scheduledEvents.create({
-        name: `${match.homeTeam.name} - ${match.awayTeam.name}`,
-        privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
-        entityType: GuildScheduledEventEntityType.Voice,
-        entityMetadata: { location: channel.id },
-        scheduledStartTime: new Date(match.date),
-        description: await this.createEventDescription(match),
-      });
-      
-      console.log(`✅ Discord event başarıyla oluşturuldu!`);
-      console.log(`   - Event ID: ${event.id}`);
-      console.log(`   - Event adı: ${event.name}`);
-      console.log(`   - Event URL: ${event.url || 'Mevcut değil'}`);
-      console.log(`   - Entity ID: ${event.entityId}`);
-      console.log(`   - Entity Type: ${getEntityTypeString(event.entityType)}`);
-      
-      // Veritabanına event_id'yi kaydet
-      console.log(`💾 Veritabanına event bilgileri kaydediliyor...`);
-      await this.supabase.updateMatchWithEventId(match.id, event.id);
-      console.log(`   - Maç tablosu güncellendi: event_id = ${event.id}`);
-      
-      // events tablosuna kaydet
-      const dbEvent = await this.supabase.createEvent(match.id, event.id);
-      console.log(`   - Events tablosuna kayıt eklendi: ID = ${dbEvent.id}`);
-      
-      return event;
-    } catch (error) {
-      console.error(`❌ Event oluşturma sırasında hata oluştu:`, error);
-      console.error(`   - Hata detayları: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`);
-      throw error;
-    }
-  }
-
-  private async createGuildEventWithRetry(match: Match, channel: VoiceChannel, maxRetries = 3): Promise<GuildScheduledEvent | null> {
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        return await this.createGuildEvent(match, channel);
-      } catch (error) {
-        console.error(`Etkinlik oluşturulamadı (deneme ${i + 1}/${maxRetries}):`, error);
-        if (i === maxRetries - 1) throw error;
-        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
-      }
-    }
-    return null;
-  }
-
 
   async start() {
     this.login(config.discord.botToken);

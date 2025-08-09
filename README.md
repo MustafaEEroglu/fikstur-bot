@@ -52,7 +52,6 @@ Discord tabanlı otomatik maç fikstürü bildirim botu. Bot, belirli liglerdeki
 - **Harici API'ler**: 
   - SerpApi (maç verisi çekmek için)
   - OpenRouter (AI tahminleri için)
-- **Barındırma**: Vercel (serverless functions)
 - **Geliştirme Araçları**: nodemon, ts-node
 
 ## 📦 Kurulum
@@ -154,36 +153,65 @@ npm run dev
 - **Sesli Odalar**: Maç başlamadan 15 dakika önce otomatik sesli oda oluşturma
 - **Haftalık Kontrol**: Her 5 dakikada bir yeni maçları kontrol etme
 
-## 🚀 Dağıtım
-
-### Vercel'e Dağıtım
-1. [Vercel](https://vercel.com/) üzerinden yeni bir proje oluşturun
-2. GitHub reposunuzu bağlayın
-3. Ortam değişkenlerini ekleyin
-4. Build komutunu: `npm run build`
-5. Çıktı dizini: `dist`
-
-### GitHub Pages
-```bash
-npm run build
-git add dist
-git commit -m "Deploy to GitHub Pages"
-git push origin main
-```
-
 ## 📊 Veritabanı Şeması
 
 ### teams Tablosu
 ```sql
 CREATE TABLE teams (
   id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
+  name VARCHAR(255) NOT NULL UNIQUE,
   logo TEXT,
-  short_name VARCHAR(10) NOT NULL
+  short_name VARCHAR(10) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Index for performance
+CREATE INDEX idx_teams_name ON teams(name);
 ```
 
 ### matches Tablosu
+```sql
+CREATE TABLE matches (
+  id SERIAL PRIMARY KEY,
+  home_team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+  away_team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+  date TIMESTAMP WITH TIME ZONE NOT NULL,
+  time VARCHAR(10) NOT NULL,
+  league VARCHAR(255) NOT NULL,
+  status VARCHAR(20) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_play', 'full_time')),
+  google_link TEXT,
+  broadcast_channel VARCHAR(255),
+  home_win_probability INTEGER DEFAULT 33,
+  away_win_probability INTEGER DEFAULT 33,
+  draw_probability INTEGER DEFAULT 34,
+  notified BOOLEAN DEFAULT FALSE,
+  voice_room_created BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for performance
+CREATE INDEX idx_matches_date ON matches(date);
+CREATE INDEX idx_matches_notified ON matches(notified) WHERE notified = FALSE;
+CREATE INDEX idx_matches_voice_room ON matches(voice_room_created) WHERE voice_room_created = FALSE;
+CREATE INDEX idx_matches_teams ON matches(home_team_id, away_team_id);
+
+-- Unique constraint to prevent duplicate matches
+CREATE UNIQUE INDEX idx_matches_unique ON matches(home_team_id, away_team_id, date, league);
+```
+
+### discord_roles Tablosu
+```sql
+CREATE TABLE discord_roles (
+  id VARCHAR(255) PRIMARY KEY, -- Discord role ID
+  name VARCHAR(255) NOT NULL,
+  team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Index for performance
+CREATE INDEX idx_discord_roles_team_id ON discord_roles(team_id);
+```
 ```sql
 CREATE TABLE matches (
   id SERIAL PRIMARY KEY,

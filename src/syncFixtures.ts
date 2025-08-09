@@ -120,18 +120,6 @@ export class FixtureSyncService {
   }
 }
 
-// Export for use as Vercel serverless function
-export default async function handler(_req: any, res: any) {
-  try {
-    const syncService = new FixtureSyncService();
-    await syncService.syncAllFixtures();
-    res.status(200).json({ message: 'Fixture synchronization completed successfully!' });
-  } catch (error) {
-    console.error('Sync handler error:', error);
-    res.status(500).json({ error: 'Fixture synchronization failed' });
-  }
-}
-
 // For local testing
 if (require.main === module) {
   const syncService = new FixtureSyncService();

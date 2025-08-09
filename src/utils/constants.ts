@@ -1,7 +1,7 @@
 // Timing constants
 export const INTERVALS = {
   MATCH_CHECK: 3 * 60 * 1000,       // 3 dakika
-  VOICE_ROOM_CLEANUP: 3 * 60 * 60 * 1000, // 3 saat
+  VOICE_ROOM_CLEANUP: 2 * 60 * 60 * 1000, // 2 saat
   TEST_ROOM_CLEANUP: 5 * 60 * 1000,  // 5 dakika
 } as const;
 
