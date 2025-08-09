@@ -4,7 +4,6 @@ import { SupabaseService } from './services/supabase';
 import { OpenRouterService } from './services/openrouter';
 import { Match } from './types';
 import { format } from 'date-fns';
-import { testCommands, handleTestCommand } from './testCommands';
 import { INTERVALS, TURKISH_TEAMS, ERROR_MESSAGES } from './utils/constants';
 
 export class DiscordClient extends Client {
@@ -36,7 +35,6 @@ export class DiscordClient extends Client {
         .setName('hafta')
         .setDescription('Gelecek 7 günün maç fikstürünü gösterir')
         .toJSON(),
-      ...testCommands,
     ];
 
     const rest = new REST({ version: '10' }).setToken(config.discord.botToken);
@@ -68,8 +66,6 @@ export class DiscordClient extends Client {
       
       if (command === 'hafta') {
         await this.handleWeekCommand(interaction);
-      } else if (['test-notification', 'test-voice-room', 'list-matches', 'clear-test-data'].includes(command)) {
-        await handleTestCommand(interaction, this.supabase);
       }
     });
   }

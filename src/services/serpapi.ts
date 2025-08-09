@@ -17,13 +17,8 @@ export class SerpApiService {
 
   async fetchFixtures(leagueConfig: LeagueConfig): Promise<Match[]> {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Bugünün başlangıcı (00:00:00)
     const nextWeek = addDays(today, 7);
-    nextWeek.setHours(23, 59, 59, 999); // Gelecek haftanın sonu (23:59:59)
     
-    console.log(`🔍 Fetching fixtures for ${leagueConfig.name} between ${today.toISOString()} and ${nextWeek.toISOString()}`);
-    
-    // Use the correct sports results engine as per SerpApi documentation
     const params = {
       q: `${leagueConfig.serpApiQuery} fixtures`,
       location: 'Istanbul, Turkey',
@@ -36,68 +31,44 @@ export class SerpApiService {
 
       // Check for sports_results in the response
       if (response.data.sports_results && response.data.sports_results.games) {
-        console.log(`📋 Found ${response.data.sports_results.games.length} games in sports_results.games`);
         for (const game of response.data.sports_results.games) {
-          // Parse the date from the game
           const gameDate = this.parseGameDate(game.date);
-          console.log(`📅 Parsed date: "${game.date}" -> ${gameDate ? gameDate.toISOString() : 'null'}`);
-          
           if (gameDate && gameDate >= today && gameDate <= nextWeek) {
-            console.log(`✅ Date is within range, parsing game...`);
             const match = this.parseGame(game, leagueConfig.name);
             if (match) {
               matches.push(match);
-              console.log(`✅ Added match: ${match.homeTeam.name} vs ${match.awayTeam.name} at ${match.date}`);
             }
-          } else {
-            console.log(`❌ Date is outside range: ${gameDate ? gameDate.toISOString() : 'null'}`);
+          }
+        }
+      }
+
+      // Check for sports_results.game_spotlight (bugünün maçı için)
+      if (response.data.sports_results && response.data.sports_results.game_spotlight) {
+        const spotlight = response.data.sports_results.game_spotlight;
+        const gameDate = this.parseGameDate(spotlight.date);
+        
+        if (gameDate && gameDate >= today && gameDate <= nextWeek) {
+          const match = this.parseSpotlightGame(spotlight, leagueConfig.name);
+          if (match) {
+            matches.push(match);
           }
         }
       }
 
       // Check for knowledge_graph in the response (alternative location for game data)
       if (response.data.knowledge_graph && response.data.knowledge_graph.games) {
-        console.log(`📋 Found ${response.data.knowledge_graph.games.length} games in knowledge_graph.games`);
         for (const game of response.data.knowledge_graph.games) {
           const gameDate = this.parseGameDate(game.date);
-          console.log(`📅 Parsing knowledge_graph date: "${game.date}" -> ${gameDate ? gameDate.toISOString() : 'null'}`);
-          
           if (gameDate && gameDate >= today && gameDate <= nextWeek) {
-            console.log(`✅ KG Date is within range, parsing game...`);
             const match = this.parseGame(game, leagueConfig.name);
             if (match) {
               matches.push(match);
-              console.log(`✅ Added match from knowledge_graph: ${match.homeTeam.name} vs ${match.awayTeam.name} at ${match.date}`);
-            }
-          } else {
-            console.log(`❌ KG Date is outside range: ${gameDate ? gameDate.toISOString() : 'null'}`);
-          }
-        }
-      }
-
-      // Check for organic_results in the response (another possible location)
-      if (response.data.organic_results) {
-        for (const result of response.data.organic_results) {
-          // Look for result that contains match information
-          if (result.title && result.title.toLowerCase().includes('vs') && result.date) {
-            const gameDate = this.parseGameDate(result.date);
-            console.log(`📅 Parsing organic_result date: "${result.date}" -> ${gameDate ? gameDate.toISOString() : 'null'}`);
-            
-            if (gameDate && gameDate >= today && gameDate <= nextWeek) {
-              console.log(`✅ Organic Date is within range, parsing result...`);
-              const match = this.parseOrganicResult(result, leagueConfig.name);
-              if (match) {
-                matches.push(match);
-                console.log(`✅ Added match from organic_results: ${match.homeTeam.name} vs ${match.awayTeam.name} at ${match.date}`);
-              }
-            } else {
-              console.log(`❌ Organic Date is outside range: ${gameDate ? gameDate.toISOString() : 'null'}`);
             }
           }
         }
       }
 
-      console.log(`🎯 Total matches found for ${leagueConfig.name}: ${matches.length}`);
+      console.log(` Total matches found for ${leagueConfig.name}: ${matches.length}`);
       return matches;
     } catch (error: any) {
       console.error(`Error fetching fixtures for ${leagueConfig.name}:`, error);
@@ -110,19 +81,15 @@ export class SerpApiService {
 
   private parseGameDate(dateStr: string): Date | null {
     try {
-      // Check if dateStr is undefined or null
       if (!dateStr) {
-        console.log('❌ parseGameDate: dateStr is null or undefined');
         return null;
       }
-      
-      console.log('🔍 parseGameDate: Parsing date string:', JSON.stringify(dateStr));
       
       const today = new Date();
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      // 1. Handle "today, HH:MM XM" format
+      // Handle "today, HH:MM XM" format
       const todayTimeMatch = dateStr.toLowerCase().match(/today,\s*(\d{1,2}):(\d{2})\s*(am|pm)/i);
       if (todayTimeMatch) {
         let hour = parseInt(todayTimeMatch[1]);
@@ -139,7 +106,7 @@ export class SerpApiService {
         return today;
       }
       
-      // 1a. Handle "today HH:MM XM" format (virgül olmadan)
+      // Handle "today HH:MM XM" format (virgül olmadan)
       const todayTimeMatchNoComma = dateStr.toLowerCase().match(/today\s+(\d{1,2}):(\d{2})\s*(am|pm)/i);
       if (todayTimeMatchNoComma) {
         let hour = parseInt(todayTimeMatchNoComma[1]);
@@ -156,21 +123,19 @@ export class SerpApiService {
         return today;
       }
       
-      // 1b. Handle "today HH:XX" format (AM/PM olmadan)
+      // Handle "today HH:XX" format (AM/PM olmadan)
       const todayTimeMatch24 = dateStr.toLowerCase().match(/today\s+(\d{1,2}):(\d{2})/i);
       if (todayTimeMatch24) {
         const hour = parseInt(todayTimeMatch24[1]);
         const minute = parseInt(todayTimeMatch24[2]);
         
         today.setHours(hour, minute, 0, 0);
-        console.log('✅ parseGameDate: Parsed "today HH:MM" format:', today.toISOString());
         return today;
       }
       
-      // 1c. Handle just "today" without time (set default to 20:00)
+      // Handle sadece "today" format
       if (dateStr.toLowerCase().trim() === 'today') {
-        today.setHours(20, 0, 0, 0); // Default to 20:00
-        console.log('✅ parseGameDate: Parsed "today" with default time 20:00:', today.toISOString());
+        today.setHours(20, 0, 0, 0); // Default 20:00
         return today;
       }
       
@@ -191,11 +156,12 @@ export class SerpApiService {
         return tomorrow;
       }
       
-      // 3. Handle simple "today" and "tomorrow"  
-      // Bu kısım artık yukarıda handled ediliyor, sadece tomorrow kalıyor
-      if (dateStr.toLowerCase().trim() === 'tomorrow') {
-        tomorrow.setHours(20, 0, 0, 0); // Default to 20:00
-        console.log('✅ parseGameDate: Parsed "tomorrow" with default time 20:00:', tomorrow.toISOString());
+      // 3. Handle simple "today" and "tomorrow"
+      if (dateStr.toLowerCase() === 'today') {
+        return today;
+      }
+      
+      if (dateStr.toLowerCase() === 'tomorrow') {
         return tomorrow;
       }
       
@@ -393,93 +359,18 @@ export class SerpApiService {
         }
       }
       
+      // 10. Son çare: Tarih parse edilemedi
+      console.log(`❌ parseGameDate: Hiçbir format eşleşmedi! Date string: "${dateStr}"`);
+      console.log(`❌ parseGameDate: Desteklenen formatlar:`);
+      console.log(`   - "today", "today 19:00", "today, 7:00 PM"`);
+      console.log(`   - "tomorrow", "tomorrow 19:00", "tomorrow, 7:00 PM"`);
+      console.log(`   - "Aug 9", "9 Aug", "August 9"`);
+      console.log(`   - "09.08.2025", "09.08.25"`);
+      console.log(`   - "08/09/2025", "08-09-2025"`);
+      
       return null;
     } catch (error: any) {
       console.log('❌ parseGameDate: General error:', error.message, 'for dateStr:', JSON.stringify(dateStr));
-      return null;
-    }
-  }
-
-  private parseOrganicResult(result: any, league: string): Match | null {
-    try {
-      // Extract team names from title
-      const title = result.title || '';
-      const vsMatch = title.match(/(.+?)\s+vs\s+(.+?)(?:\s+-\s+.+)?$/i);
-      
-      if (!vsMatch) return null;
-      
-      const homeTeamName = vsMatch[1].trim();
-      const awayTeamName = vsMatch[2].trim();
-      
-      // Parse date
-      const gameDate = this.parseGameDate(result.date);
-      if (!gameDate) return null;
-      
-      // Use default time if not specified
-      let time = DEFAULTS.MATCH_TIME; // Default is 20:00
-      
-      console.log('🔍 parseOrganicResult: Original default time:', time);
-      console.log('🔍 parseOrganicResult: Teams:', homeTeamName, 'vs', awayTeamName);
-      console.log('🔍 parseOrganicResult: League:', league);
-      
-      // TIMEZONE CORRECTION for Turkish teams
-      // Turkish Super League and Turkish teams typically play at 19:00, 20:00, 21:00, 21:30
-      // Conference League typically at 21:00, 21:45
-      let correctedTime: string = time;
-      
-      // Check for Turkish teams or leagues
-      const isTurkishTeam = homeTeamName.includes('Galatasaray') || awayTeamName.includes('Galatasaray') ||
-                           homeTeamName.includes('Gaziantep') || awayTeamName.includes('Gaziantep') ||
-                           homeTeamName.includes('Beşiktaş') || awayTeamName.includes('Beşiktaş') ||
-                           homeTeamName.includes('Fenerbahçe') || awayTeamName.includes('Fenerbahçe');
-      
-      const isTurkishLeague = league.toLowerCase().includes('süper') || 
-                             league.toLowerCase().includes('turkish') ||
-                             league.toLowerCase().includes('tff');
-      
-      const isConferenceLeague = league.toLowerCase().includes('conference') || 
-                                league.toLowerCase().includes('uefa');
-      
-      if (isTurkishTeam || isTurkishLeague) {
-        if (time === '20:00') {
-          correctedTime = '21:30'; // Turkish Super League common time
-          console.log('⚠️ parseOrganicResult: Corrected Turkish Super League time from', time, 'to', correctedTime);
-        }
-      }
-      
-      if (isConferenceLeague && (time === '20:00' || time === '18:45' || time === '19:00')) {
-        correctedTime = '21:45'; // Conference League Turkish time
-        console.log('⚠️ parseOrganicResult: Corrected Conference League time from', time, 'to', correctedTime);
-      }
-      
-      // Format date
-      const formattedDate = `${gameDate.getFullYear()}-${String(gameDate.getMonth() + 1).padStart(2, '0')}-${String(gameDate.getDate()).padStart(2, '0')}T${correctedTime}:00+03:00`;
-
-      console.log('✅ parseOrganicResult: Final formatted date:', formattedDate);
-
-      return {
-        id: 0,
-        homeTeam: {
-          id: 0,
-          name: homeTeamName,
-          logo: '',
-          short_name: homeTeamName.substring(0, 3).toUpperCase(),
-        },
-        awayTeam: {
-          id: 0,
-          name: awayTeamName,
-          logo: '',
-          short_name: awayTeamName.substring(0, 3).toUpperCase(),
-        },
-        date: formattedDate,
-        time: correctedTime,
-        league: league,
-        status: 'scheduled',
-        googleLink: '',
-        broadcastChannel: '',
-      };
-    } catch (error) {
-      console.error('Error parsing organic result:', error);
       return null;
     }
   }
@@ -580,6 +471,76 @@ export class SerpApiService {
       };
     } catch (error) {
       console.error('Error parsing game:', error);
+      return null;
+    }
+  }
+
+  private parseSpotlightGame(spotlight: any, league: string): Match | null {
+    try {
+      if (!spotlight.teams || spotlight.teams.length !== 2) {
+        return null;
+      }
+
+      const [homeTeam, awayTeam] = spotlight.teams;
+      
+      if (!homeTeam || !awayTeam) {
+        return null;
+      }
+
+      const gameDate = this.parseGameDate(spotlight.date);
+      if (!gameDate) {
+        return null;
+      }
+
+      // Parse time if available
+      let time = spotlight.time || DEFAULTS.MATCH_TIME;
+
+      // Handle time formats like "7:00 PM"
+      if (time && typeof time === 'string') {
+        const timeMatch = time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+        if (timeMatch) {
+          let hour = parseInt(timeMatch[1]);
+          const minute = timeMatch[2];
+          const period = timeMatch[3].toUpperCase();
+          
+          if (period === 'PM' && hour !== 12) {
+            hour += 12;
+          } else if (period === 'AM' && hour === 12) {
+            hour = 0;
+          }
+          
+          time = `${hour.toString().padStart(2, '0')}:${minute}`;
+        }
+      }
+
+      // Set date with time
+      const [hour, minute] = time.split(':').map(Number);
+      gameDate.setHours(hour, minute, 0, 0);
+      const formattedDate = gameDate.toISOString();
+
+      return {
+        id: 0,
+        homeTeam: {
+          id: 0,
+          name: homeTeam.name,
+          logo: homeTeam.thumbnail || '',
+          short_name: homeTeam.name.substring(0, 3).toUpperCase(),
+        },
+        awayTeam: {
+          id: 0,
+          name: awayTeam.name,
+          logo: awayTeam.thumbnail || '',
+          short_name: awayTeam.name.substring(0, 3).toUpperCase(),
+        },
+        date: formattedDate,
+        time: time,
+        league: spotlight.league || league,
+        status: 'scheduled',
+        googleLink: '',
+        broadcastChannel: spotlight.stadium || spotlight.venue || '',
+      };
+    } catch (error) {
+      console.error('Error parsing spotlight game:', error);
       return null;
     }
   }

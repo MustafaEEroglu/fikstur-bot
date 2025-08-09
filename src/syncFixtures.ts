@@ -22,10 +22,8 @@ export class FixtureSyncService {
       { name: 'Fenerbahçe', teams: ['Fenerbahçe'], serpApiQuery: 'Fenerbahçe' },
       { name: 'Beşiktaş', teams: ['Beşiktaş'], serpApiQuery: 'Beşiktaş' },
       { name: 'Liverpool', teams: ['Liverpool'], serpApiQuery: 'Liverpool' },
-      { name: 'Chelsea', teams: ['Chelsea'], serpApiQuery: 'Chelsea' },
       { name: 'Arsenal', teams: ['Arsenal'], serpApiQuery: 'Arsenal' },
       { name: 'Manchester United', teams: ['Manchester United'], serpApiQuery: 'Manchester United' },
-      { name: 'Manchester City', teams: ['Manchester City'], serpApiQuery: 'Manchester City' },
       { name: 'Real Madrid', teams: ['Real Madrid'], serpApiQuery: 'Real Madrid' },
       { name: 'Barcelona', teams: ['Barcelona'], serpApiQuery: 'Barcelona' },
     ];
@@ -53,10 +51,20 @@ export class FixtureSyncService {
 
   private async syncLeagueFixtures(league: LeagueConfig) {
     try {
+      console.log(`🔄 [${league.name}] senkronizasyonu başlıyor...`);
+      
       // Fetch fixtures from SerpApi
       const matches = await this.serpapi.fetchFixtures(league);
+      console.log(`📊 [${league.name}] SerpAPI'den ${matches.length} maç alındı`);
+
+      if (matches.length === 0) {
+        console.log(`⚠️ [${league.name}] için hiç maç bulunamadı, sync atlanıyor`);
+        return;
+      }
 
       for (const match of matches) {
+        console.log(`🏟️ İşleniyor: ${match.homeTeam.name} vs ${match.awayTeam.name} (${match.date})`);
+        
         // Check if teams exist in database, create if not
         const homeTeam = await this.ensureTeam(match.homeTeam);
         const awayTeam = await this.ensureTeam(match.awayTeam);
@@ -81,11 +89,15 @@ export class FixtureSyncService {
           voice_room_created: false,
         };
 
+        console.log(`💾 Veritabanına kaydediliyor: ${homeTeam.name} vs ${awayTeam.name}`);
         // Upsert match to database
         await this.supabase.upsertMatch(matchData);
+        console.log(`✅ Başarıyla kaydedildi: ${homeTeam.name} vs ${awayTeam.name}`);
       }
+      
+      console.log(`🎉 [${league.name}] senkronizasyonu tamamlandı! ${matches.length} maç işlendi.`);
     } catch (error) {
-      console.error(`Error syncing fixtures for ${league.name}:`, error);
+      console.error(`❌ [${league.name}] senkronizasyonu hatası:`, error);
       throw error;
     }
   }
