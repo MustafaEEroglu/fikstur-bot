@@ -17,7 +17,11 @@ export class SerpApiService {
 
   async fetchFixtures(leagueConfig: LeagueConfig): Promise<Match[]> {
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Bugünün başlangıcı (00:00:00)
     const nextWeek = addDays(today, 7);
+    nextWeek.setHours(23, 59, 59, 999); // Gelecek haftanın sonu (23:59:59)
+    
+    console.log(`🔍 Fetching fixtures for ${leagueConfig.name} between ${today.toISOString()} and ${nextWeek.toISOString()}`);
     
     // Use the correct sports results engine as per SerpApi documentation
     const params = {
@@ -32,14 +36,21 @@ export class SerpApiService {
 
       // Check for sports_results in the response
       if (response.data.sports_results && response.data.sports_results.games) {
+        console.log(`📋 Found ${response.data.sports_results.games.length} games in sports_results.games`);
         for (const game of response.data.sports_results.games) {
           // Parse the date from the game
           const gameDate = this.parseGameDate(game.date);
+          console.log(`📅 Parsed date: "${game.date}" -> ${gameDate ? gameDate.toISOString() : 'null'}`);
+          
           if (gameDate && gameDate >= today && gameDate <= nextWeek) {
+            console.log(`✅ Date is within range, parsing game...`);
             const match = this.parseGame(game, leagueConfig.name);
             if (match) {
               matches.push(match);
+              console.log(`✅ Added match: ${match.homeTeam.name} vs ${match.awayTeam.name} at ${match.date}`);
             }
+          } else {
+            console.log(`❌ Date is outside range: ${gameDate ? gameDate.toISOString() : 'null'}`);
           }
         }
       }
@@ -50,12 +61,16 @@ export class SerpApiService {
         for (const game of response.data.knowledge_graph.games) {
           const gameDate = this.parseGameDate(game.date);
           console.log(`📅 Parsing knowledge_graph date: "${game.date}" -> ${gameDate ? gameDate.toISOString() : 'null'}`);
+          
           if (gameDate && gameDate >= today && gameDate <= nextWeek) {
+            console.log(`✅ KG Date is within range, parsing game...`);
             const match = this.parseGame(game, leagueConfig.name);
             if (match) {
               matches.push(match);
               console.log(`✅ Added match from knowledge_graph: ${match.homeTeam.name} vs ${match.awayTeam.name} at ${match.date}`);
             }
+          } else {
+            console.log(`❌ KG Date is outside range: ${gameDate ? gameDate.toISOString() : 'null'}`);
           }
         }
       }
@@ -67,12 +82,16 @@ export class SerpApiService {
           if (result.title && result.title.toLowerCase().includes('vs') && result.date) {
             const gameDate = this.parseGameDate(result.date);
             console.log(`📅 Parsing organic_result date: "${result.date}" -> ${gameDate ? gameDate.toISOString() : 'null'}`);
+            
             if (gameDate && gameDate >= today && gameDate <= nextWeek) {
+              console.log(`✅ Organic Date is within range, parsing result...`);
               const match = this.parseOrganicResult(result, leagueConfig.name);
               if (match) {
                 matches.push(match);
                 console.log(`✅ Added match from organic_results: ${match.homeTeam.name} vs ${match.awayTeam.name} at ${match.date}`);
               }
+            } else {
+              console.log(`❌ Organic Date is outside range: ${gameDate ? gameDate.toISOString() : 'null'}`);
             }
           }
         }
@@ -144,6 +163,14 @@ export class SerpApiService {
         const minute = parseInt(todayTimeMatch24[2]);
         
         today.setHours(hour, minute, 0, 0);
+        console.log('✅ parseGameDate: Parsed "today HH:MM" format:', today.toISOString());
+        return today;
+      }
+      
+      // 1c. Handle just "today" without time (set default to 20:00)
+      if (dateStr.toLowerCase().trim() === 'today') {
+        today.setHours(20, 0, 0, 0); // Default to 20:00
+        console.log('✅ parseGameDate: Parsed "today" with default time 20:00:', today.toISOString());
         return today;
       }
       
@@ -164,12 +191,11 @@ export class SerpApiService {
         return tomorrow;
       }
       
-      // 3. Handle simple "today" and "tomorrow"
-      if (dateStr.toLowerCase() === 'today') {
-        return today;
-      }
-      
-      if (dateStr.toLowerCase() === 'tomorrow') {
+      // 3. Handle simple "today" and "tomorrow"  
+      // Bu kısım artık yukarıda handled ediliyor, sadece tomorrow kalıyor
+      if (dateStr.toLowerCase().trim() === 'tomorrow') {
+        tomorrow.setHours(20, 0, 0, 0); // Default to 20:00
+        console.log('✅ parseGameDate: Parsed "tomorrow" with default time 20:00:', tomorrow.toISOString());
         return tomorrow;
       }
       
