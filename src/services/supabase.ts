@@ -100,8 +100,12 @@ export class SupabaseService {
       return cached.matches;
     }
     
+    // 1 saat sonrası (bildirim zamanı)
     const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    const now = new Date().toISOString();
+    // 50 dakika sonrası (pencere başlangıcı)
+    const fiftyMinutesFromNow = new Date(Date.now() + 50 * 60 * 1000).toISOString();
+
+    console.log(`🔍 Looking for matches between ${fiftyMinutesFromNow} and ${oneHourFromNow}`);
 
     const { data, error } = await this.client
       .from('matches')
@@ -110,12 +114,14 @@ export class SupabaseService {
         homeTeam:teams!home_team_id(id, name, logo, short_name),
         awayTeam:teams!away_team_id(id, name, logo, short_name)
       `)
-      .gte('date', now)
-      .lte('date', oneHourFromNow)
+      .gte('date', fiftyMinutesFromNow)   // 50 dakika sonrası
+      .lte('date', oneHourFromNow)        // 1 saat sonrası  
       .eq('status', 'scheduled')
       .eq('notified', false)
       .order('date', { ascending: true })
-      .limit(50); // Limit to prevent large data sets
+      .limit(50);
+
+    console.log(`📊 Found ${data?.length || 0} matches needing notification`);
 
     if (error) throw new Error(`Error fetching matches for notification: ${error.message}`);
     
