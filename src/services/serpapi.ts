@@ -381,6 +381,34 @@ export class SerpApiService {
         return null;
       }
 
+      // ⚠️ ERTELENEN MAÇ FİLTRELEME
+      const dateStr = game.date?.toLowerCase() || '';
+      const timeStr = game.time?.toLowerCase() || '';
+      
+      // Ertelenen maç kalıpları
+      const postponedPatterns = [
+        'ertelendi',
+        'postponed', 
+        'delayed',
+        'tbd',
+        'to be determined',
+        'saat blrsz',
+        'saat belli değil',
+        'time tbc',
+        'time tbd'
+      ];
+      
+      // Tarih veya saat alanında erteleme ifadesi varsa skip et
+      const isPostponed = postponedPatterns.some(pattern => 
+        dateStr.includes(pattern) || timeStr.includes(pattern)
+      );
+      
+      if (isPostponed) {
+        console.log(`⏸️ SKIPPING POSTPONED MATCH: ${game.teams[0].name} vs ${game.teams[1].name}`);
+        console.log(`   📅 Date: "${game.date}", ⏰ Time: "${game.time}"`);
+        return null;
+      }
+
       const homeTeam = game.teams[0];
       const awayTeam = game.teams[1];
 
@@ -478,6 +506,34 @@ export class SerpApiService {
   private parseSpotlightGame(spotlight: any, league: string): Match | null {
     try {
       if (!spotlight.teams || spotlight.teams.length !== 2) {
+        return null;
+      }
+
+      // ⚠️ ERTELENEN MAÇ FİLTRELEME (Spotlight için)
+      const dateStr = spotlight.date?.toLowerCase() || '';
+      const timeStr = spotlight.time?.toLowerCase() || '';
+      
+      // Ertelenen maç kalıpları
+      const postponedPatterns = [
+        'ertelendi',
+        'postponed', 
+        'delayed',
+        'tbd',
+        'to be determined',
+        'saat blrsz',
+        'saat belli değil',
+        'time tbc',
+        'time tbd'
+      ];
+      
+      // Tarih veya saat alanında erteleme ifadesi varsa skip et
+      const isPostponed = postponedPatterns.some(pattern => 
+        dateStr.includes(pattern) || timeStr.includes(pattern)
+      );
+      
+      if (isPostponed) {
+        console.log(`⏸️ SKIPPING POSTPONED SPOTLIGHT: ${spotlight.teams[0].name} vs ${spotlight.teams[1].name}`);
+        console.log(`   📅 Date: "${spotlight.date}", ⏰ Time: "${spotlight.time}"`);
         return null;
       }
 

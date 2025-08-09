@@ -114,19 +114,29 @@ export class DiscordClient extends Client {
       // Paralel işlem için Promise.all kullan
       await Promise.all(matches.map(async (match) => {
         try {
-          const role = await this.getRoleForMatch(match);
-          const embed = await this.createMatchEmbed(match);
+          console.log(`📤 Processing notification for match: ${match.homeTeam.name} vs ${match.awayTeam.name}`);
+          console.log(`   📅 Match date: ${match.date}`);
+          console.log(`   🏟️ League: ${match.league}`);
           
-          await channel.send({
+          const role = await this.getRoleForMatch(match);
+          console.log(`   👥 Role found: ${role ? 'Yes' : 'No'} - ${role || 'No role'}`);
+          
+          const embed = await this.createMatchEmbed(match);
+          console.log(`   📋 Embed created successfully`);
+          
+          const sentMessage = await channel.send({
             content: role ? `${role} Maç Bildirimi!` : '🚨 Yeni Maç Bildirimi!',
             embeds: [embed],
             components: [this.createGoogleButton(match.googleLink)],
           });
+          console.log(`   ✅ Notification sent successfully - Message ID: ${sentMessage.id}`);
 
           // Update only the notified status, not voice_room_created
           await this.supabase.updateMatchStatus(match.id, { notified: true });
+          console.log(`   📝 Database updated - notified: true for match ${match.id}`);
+          
         } catch (error) {
-          console.error(`Error processing match ${match.id}:`, error);
+          console.error(`❌ Error processing match ${match.id} (${match.homeTeam.name} vs ${match.awayTeam.name}):`, error);
         }
       }));
     } catch (error) {
@@ -136,30 +146,43 @@ export class DiscordClient extends Client {
 
   private async checkForVoiceRooms() {
     try {
+      console.log('🎤 Checking for voice room creation...');
       const matches = await this.supabase.getMatchesForVoiceRoom();
+      console.log(`📊 Found ${matches.length} matches needing voice rooms`);
       
       if (matches.length === 0) return;
+
+      // Log match details
+      matches.forEach(match => {
+        console.log(`   🏟️ ${match.homeTeam.name} vs ${match.awayTeam.name} - ${match.date}`);
+      });
       
       // Check if a voice room already exists for any of these matches
       const existingRoom = this.voiceChannels.values().next().value;
       if (existingRoom) {
+        console.log(`🎤 Existing voice room found: ${existingRoom}`);
         // Send notification in existing room
         const channel = this.channels.cache.get(existingRoom) as VoiceChannel;
         if (channel) {
+          console.log(`   📤 Sending notification to existing room: ${channel.name}`);
           // Sadece bir bildirim gönder
           const firstMatch = matches[0];
           const embed = await this.createVoiceRoomNotification(firstMatch);
           await channel.send({ embeds: [embed] });
+          console.log(`   ✅ Notification sent to existing room`);
         }
         return;
       }
 
+      console.log('🏗️ Creating new voice room...');
       // Create new voice room if none exists
       const guild = this.guilds.cache.get(config.discord.guildId);
       if (!guild) {
+        console.error(`❌ Guild not found: ${config.discord.guildId}`);
         console.error(ERROR_MESSAGES.GUILD_NOT_FOUND);
         return;
       }
+      console.log(`✅ Guild found: ${guild.name}`);
 
       // Create informative channel name with team abbreviations
       const firstMatch = matches[0];
@@ -168,11 +191,13 @@ export class DiscordClient extends Client {
       const leagueName = firstMatch.league.replace(/[^a-zA-Z0-9şğüıöçŞĞÜİÖÇ\s]/g, '').substring(0, 15);
       
       const channelName = `🏟️ ${homeTeamAbbr} vs ${awayTeamAbbr} | ${leagueName}`;
+      console.log(`🏷️ Creating channel with name: "${channelName}"`);
       
       // Get the highest position among voice channels to place new channel at the top
       const voiceChannels = guild.channels.cache.filter(c => c.type === ChannelType.GuildVoice);
       const highestPosition = voiceChannels.size > 0 ? 
         Math.max(...voiceChannels.map(c => c.position)) + 1 : 0;
+      console.log(`📍 Placing channel at position: ${highestPosition}`);
 
       const channel = await guild.channels.create({
         name: channelName,
@@ -180,52 +205,72 @@ export class DiscordClient extends Client {
         reason: 'Match starting soon',
         position: highestPosition, // Place at the top
       });
+      console.log(`✅ Voice channel created successfully: ${channel.name} (ID: ${channel.id})`);
 
       this.voiceChannels.add(channel.id);
+      console.log(`📝 Added channel to tracking list. Total tracked: ${this.voiceChannels.size}`);
 
       // Sadece bir bildirim gönder
+      console.log(`📤 Sending voice room notification...`);
       const embed = await this.createVoiceRoomNotification(firstMatch);
-      await channel.send({ embeds: [embed] });
+      const sentMessage = await channel.send({ embeds: [embed] });
+      console.log(`✅ Voice room notification sent - Message ID: ${sentMessage.id}`);
 
       // Tüm maçlar için voice_room_created durumunu güncelle
+      console.log(`📝 Updating database for ${matches.length} matches...`);
       await Promise.all(matches.map(async (match) => {
         try {
           await this.supabase.updateMatchStatus(match.id, { voice_room_created: true });
+          console.log(`   ✅ Updated match ${match.id}: voice_room_created = true`);
         } catch (error) {
-          console.error(`Error updating voice_room_created for match ${match.id}:`, error);
+          console.error(`   ❌ Failed to update match ${match.id}:`, error);
         }
       }));
 
       // Schedule room cleanup (2 hours after the first match time)
+      console.log(`⏰ Scheduling room cleanup...`);
       const cleanupTime = new Date(firstMatch.date);
       cleanupTime.setHours(cleanupTime.getHours() + 2);
       
       const cleanupTimeout = cleanupTime.getTime() - Date.now();
+      console.log(`   📅 Match time: ${firstMatch.date}`);
+      console.log(`   ⏰ Cleanup scheduled for: ${cleanupTime.toISOString()}`);
+      console.log(`   ⌛ Cleanup timeout: ${cleanupTimeout}ms (${Math.round(cleanupTimeout / 1000 / 60)} minutes)`);
+      
       if (cleanupTimeout > 0) {
+        console.log(`⏰ Room will be deleted in ${Math.round(cleanupTimeout / 1000 / 60)} minutes`);
         setTimeout(async () => {
           try {
+            console.log(`🧹 Starting room cleanup for: ${channel.name}`);
             if (channel.deletable) {
               await channel.delete();
               this.voiceChannels.delete(channel.id);
-              console.log(`🧹 Sesli oda temizlendi: ${channel.name}`);
+              console.log(`✅ Voice room cleaned up successfully: ${channel.name} (ID: ${channel.id})`);
+              console.log(`📝 Removed from tracking list. Remaining: ${this.voiceChannels.size}`);
+            } else {
+              console.log(`⚠️ Channel not deletable: ${channel.name}`);
             }
           } catch (error) {
-            console.error(`Sesli oda temizlenirken hata oluştu: ${error}`);
+            console.error(`❌ Error cleaning up voice room ${channel.name}:`, error);
           }
         }, cleanupTimeout);
       } else {
-        console.log('⚠️ Temizleme zamanı geçmiş, oda hemen siliniyor');
+        console.log('⚠️ Cleanup time already passed, deleting room immediately');
         try {
+          console.log(`🧹 Attempting immediate deletion of: ${channel.name}`);
           if (channel.deletable) {
             await channel.delete();
             this.voiceChannels.delete(channel.id);
+            console.log(`✅ Voice room immediately deleted: ${channel.name}`);
+          } else {
+            console.log(`⚠️ Channel not deletable: ${channel.name}`);
           }
         } catch (error) {
-          console.error(`Hemen silme sırasında hata oluştu: ${error}`);
+          console.error(`❌ Error during immediate deletion: ${error}`);
         }
       }
     } catch (error) {
-      console.error('Error checking for voice rooms:', error);
+      console.error('❌ Error in checkForVoiceRooms:', error);
     }
   }
 
@@ -488,13 +533,18 @@ export class DiscordClient extends Client {
       console.log('🔄 Starting automatic fixture synchronization...');
       const startTime = Date.now();
       
+      // 🧹 Önce ertelenen maçları temizle
+      console.log('🧹 Cleaning postponed matches before sync...');
+      const cleanedCount = await this.supabase.cleanPostponedMatches();
+      console.log(`✅ Cleaned ${cleanedCount} postponed matches`);
+      
       await this.fixtureSyncService.syncAllFixtures();
       
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
       console.log(`✅ Automatic sync completed in ${duration}s`);
       
       // Send notification to general channel if available
-      await this.sendSyncNotification(true, duration);
+      await this.sendSyncNotification(true, duration, undefined, cleanedCount);
       
     } catch (error) {
       console.error('❌ Automatic sync failed:', error);
@@ -502,7 +552,7 @@ export class DiscordClient extends Client {
     }
   }
 
-  private async sendSyncNotification(success: boolean, duration: string, error?: any) {
+  private async sendSyncNotification(success: boolean, duration: string, error?: any, cleanedCount?: number) {
     try {
       const guilds = this.guilds.cache;
       
@@ -513,11 +563,13 @@ export class DiscordClient extends Client {
         );
 
         if (channel && channel.isTextBased()) {
+          const cleanupText = cleanedCount ? `\n🧹 ${cleanedCount} ertelenen maç temizlendi` : '';
+          
           const embed = new EmbedBuilder()
             .setColor(success ? COLORS.SUCCESS : COLORS.ERROR)
             .setTitle(success ? '✅ Otomatik Fikstür Güncellemesi' : '❌ Fikstür Güncelleme Hatası')
             .setDescription(success 
-              ? `Tüm takım fikstürleri başarıyla güncellendi.\n⏱️ Süre: ${duration} saniye`
+              ? `Tüm takım fikstürleri başarıyla güncellendi.\n⏱️ Süre: ${duration} saniye${cleanupText}`
               : `Fikstür güncellemesi sırasında hata oluştu.\n\`\`\`${error?.message || 'Bilinmeyen hata'}\`\`\``
             )
             .setTimestamp();
