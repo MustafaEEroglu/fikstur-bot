@@ -143,7 +143,44 @@ npm run dev
 2. [OpenRouter](https://openrouter.ai/) üzerinden API anahtarı alın
 3. Anahtarları `.env` dosyasına ekleyin
 
-## 📖 Kullanım
+## � Deployment (Render.com)
+
+### Render'a Deploy Etme
+1. [Render.com](https://render.com/) hesabı oluşturun
+2. **"New Web Service"** seçin
+3. GitHub repository'nizi bağlayın
+4. Ayarları yapın:
+   ```
+   Name: fikstur-bot
+   Build Command: npm install && npm run build
+   Start Command: npm start
+   Node Version: 18
+   ```
+5. **Environment Variables** ekleyin (aşağıdaki tüm değişkenler)
+6. **Deploy** butonuna tıklayın
+
+### Environment Variables (Render'da eklenecek)
+```env
+NODE_ENV=production
+DISCORD_BOT_TOKEN=your_discord_bot_token
+DISCORD_CLIENT_ID=your_discord_client_id
+DISCORD_GUILD_ID=your_discord_server_id
+DISCORD_FIXTURE_CHANNEL_ID=your_fixture_channel_id
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+SERPAPI_API_KEY=your_serpapi_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
+```
+
+### Render Avantajları
+- ✅ Gerçekten ücretsiz
+- ✅ Otomatik SSL sertifikası
+- ✅ GitHub auto-deployment
+- ✅ Crash recovery
+- ✅ Environment variables güvenliği
+
+## �📖 Kullanım
 
 ### Komutlar
 - `/hafta` - Gelecek 7 günlük maç fikstürünü gösterir
