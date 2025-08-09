@@ -92,6 +92,20 @@ export class SupabaseService {
     }
   }
 
+  // 🧹 TÜM MAÇLARI TEMİZLE (Her sync'te kullanılacak)
+  async clearAllMatches(): Promise<void> {
+    const { error } = await this.adminClient
+      .from('matches')
+      .delete()
+      .neq('id', 0); // Delete all records
+
+    if (error) throw new Error(`Error clearing matches: ${error.message}`);
+    
+    // Clear cache after deletion
+    this.matchesCache.clear();
+    console.log('✅ All matches cleared from database and cache');
+  }
+
   async getMatchesForNotification(): Promise<Match[]> {
     const cacheKey = 'matches-for-notification';
     const cached = this.matchesCache.get(cacheKey);
@@ -100,12 +114,16 @@ export class SupabaseService {
       return cached.matches;
     }
     
+    // 🇹🇷 TÜRKİYE SAATİ (UTC+3) ile hesaplama
+    const now = new Date();
+    const turkeyTime = new Date(now.getTime() + (3 * 60 * 60 * 1000)); // UTC+3
+    
     // 1 saat sonrası (bildirim zamanı)
-    const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const oneHourFromNow = new Date(turkeyTime.getTime() + 60 * 60 * 1000).toISOString();
     // 50 dakika sonrası (pencere başlangıcı)
-    const fiftyMinutesFromNow = new Date(Date.now() + 50 * 60 * 1000).toISOString();
+    const fiftyMinutesFromNow = new Date(turkeyTime.getTime() + 50 * 60 * 1000).toISOString();
 
-    console.log(`🔍 Looking for matches between ${fiftyMinutesFromNow} and ${oneHourFromNow}`);
+    console.log(`🔍 🇹🇷 Turkey time notification window: ${fiftyMinutesFromNow} to ${oneHourFromNow}`);
 
     const { data, error } = await this.client
       .from('matches')
@@ -142,8 +160,14 @@ export class SupabaseService {
       return cached.matches;
     }
     
-    const fifteenMinutesFromNow = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    const now = new Date().toISOString();
+    // 🇹🇷 TÜRKİYE SAATİ (UTC+3) ile hesaplama
+    const now = new Date();
+    const turkeyTime = new Date(now.getTime() + (3 * 60 * 60 * 1000)); // UTC+3
+    
+    const fifteenMinutesFromNow = new Date(turkeyTime.getTime() + 15 * 60 * 1000).toISOString();
+    const turkeyNow = turkeyTime.toISOString();
+
+    console.log(`🔍 🇹🇷 Turkey time voice room window: ${turkeyNow} to ${fifteenMinutesFromNow}`);
 
     const { data, error } = await this.client
       .from('matches')
@@ -152,7 +176,7 @@ export class SupabaseService {
         homeTeam:teams!home_team_id(id, name, logo, short_name),
         awayTeam:teams!away_team_id(id, name, logo, short_name)
       `)
-      .gte('date', now)
+      .gte('date', turkeyNow)
       .lte('date', fifteenMinutesFromNow)
       .eq('status', 'scheduled')
       .eq('voice_room_created', false)

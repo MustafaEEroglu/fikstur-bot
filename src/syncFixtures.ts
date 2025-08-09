@@ -17,6 +17,11 @@ export class FixtureSyncService {
   async syncAllFixtures() {
     console.log('Starting fixture synchronization...');
     
+    // 🧹 İLK ÖNCE VERİTABANINI TEMİZLE!
+    console.log('🧹 Clearing all existing matches before sync...');
+    await this.supabase.clearAllMatches();
+    console.log('✅ All matches cleared from database');
+    
     const teamConfigs: LeagueConfig[] = [
       { name: 'Galatasaray', teams: ['Galatasaray'], serpApiQuery: 'Galatasaray' },
       { name: 'Fenerbahçe', teams: ['Fenerbahçe'], serpApiQuery: 'Fenerbahçe' },
@@ -64,8 +69,23 @@ export class FixtureSyncService {
         return;
       }
 
+      // 🚫 ERTELENMİŞ MAÇLARI FİLTRELE!
+      console.log(`🔍 [${league.name}] Ertelenen maçlar kontrol ediliyor...`);
+      let validMatchCount = 0;
+      let postponedMatchCount = 0;
+
       for (const match of matches) {
-        console.log(`🏟️ İşleniyor: ${match.homeTeam.name} vs ${match.awayTeam.name} (${match.date})`);
+        // Ertelenen maç kontrolü
+        const isPostponed = this.isPostponedMatch(match);
+        
+        if (isPostponed) {
+          console.log(`🚫 [POSTPONED] Atlanıyor: ${match.homeTeam.name} vs ${match.awayTeam.name} - ${match.status}`);
+          postponedMatchCount++;
+          continue;
+        }
+
+        console.log(`🏟️ [VALID] İşleniyor: ${match.homeTeam.name} vs ${match.awayTeam.name} (${match.date})`);
+        validMatchCount++;
         
         // Check if teams exist in database, create if not
         const homeTeam = await this.ensureTeam(match.homeTeam);
@@ -97,11 +117,54 @@ export class FixtureSyncService {
         console.log(`✅ Başarıyla kaydedildi: ${homeTeam.name} vs ${awayTeam.name}`);
       }
       
-      console.log(`🎉 [${league.name}] senkronizasyonu tamamlandı! ${matches.length} maç işlendi.`);
+      console.log(`🎉 [${league.name}] senkronizasyonu tamamlandı! ${validMatchCount} geçerli maç, ${postponedMatchCount} ertelenen maç işlendi.`);
     } catch (error) {
       console.error(`❌ [${league.name}] senkronizasyonu hatası:`, error);
       throw error;
     }
+  }
+
+  // 🚫 ERTELENEN MAÇ KONTROLÜ (serpapi.ts'ten kopyalandı)
+  private isPostponedMatch(match: any): boolean {
+    const postponedPatterns = [
+      'postponed', 'ertelendi', 'delayed', 'cancelled', 'canceled', 
+      'suspended', 'abandoned', 'called off', 'rescheduled',
+      'iptal', 'askıya alındı', 'ileri tarihe ertelendi',
+      'maç ertelendi', 'oyun ertelendi', 'karşılaşma ertelendi',
+      'vs postponed', 'vs ertelendi', 'vs cancelled',
+      'match postponed', 'fixture postponed', 'game postponed',
+      'vs delayed', 'vs suspended', 'vs abandoned',
+      'vs called off', 'vs rescheduled', 'vs iptal',
+      'tarihi değişti', 'tarih belli değil', 'tarih belirsiz'
+    ];
+
+    // Status kontrolü
+    if (match.status) {
+      const statusLower = match.status.toLowerCase();
+      if (postponedPatterns.some(pattern => statusLower.includes(pattern))) {
+        return true;
+      }
+    }
+
+    // Tarih kontrolü
+    if (match.date) {
+      const dateLower = match.date.toLowerCase();
+      if (postponedPatterns.some(pattern => dateLower.includes(pattern))) {
+        return true;
+      }
+    }
+
+    // Takım adı kontrolü
+    const homeTeamLower = match.homeTeam?.name?.toLowerCase() || '';
+    const awayTeamLower = match.awayTeam?.name?.toLowerCase() || '';
+    
+    if (postponedPatterns.some(pattern => 
+      homeTeamLower.includes(pattern) || awayTeamLower.includes(pattern)
+    )) {
+      return true;
+    }
+
+    return false;
   }
 
   private async ensureTeam(team: any): Promise<any> {
