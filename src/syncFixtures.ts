@@ -126,6 +126,13 @@ export class FixtureSyncService {
 
   // 🚫 ERTELENEN MAÇ KONTROLÜ (serpapi.ts'ten kopyalandı)
   private isPostponedMatch(match: any): boolean {
+    // 🔍 DEBUG LOG - HANGI PATTERN YAKALADI GÖRELIM
+    console.log(`🔍 POSTPONED CHECK: ${match.homeTeam?.name} vs ${match.awayTeam?.name}`, {
+      status: match.status,
+      date: match.date,
+      time: match.time
+    });
+    
     const postponedPatterns = [
       'postponed', 'ertelendi', 'delayed', 'cancelled', 'canceled', 
       'suspended', 'abandoned', 'called off', 'rescheduled',
@@ -137,50 +144,61 @@ export class FixtureSyncService {
       'vs called off', 'vs rescheduled', 'vs iptal',
       'tarihi değişti', 'tarih belli değil', 'tarih belirsiz',
       'saat belirsiz', 'saat belli değil', 'time tbd', 'time unknown',
-      'hour unknown', 'saati bilinmiyor', 'ertelendi saat belirsiz',
-      '00:30', '00:00' // Şüpheli saatler
+      'hour unknown', 'saati bilinmiyor', 'ertelendi saat belirsiz'
+      // 🔧 ŞÜPHELİ SAATLER KALDIRILDI - sadece pattern matching
     ];
 
-    // Status kontrolü
+    // Status kontrolü - DETAYLI DEBUG
     if (match.status) {
       const statusLower = match.status.toLowerCase();
-      if (postponedPatterns.some(pattern => statusLower.includes(pattern))) {
-        return true;
+      for (const pattern of postponedPatterns) {
+        if (statusLower.includes(pattern)) {
+          console.log(`🚫 POSTPONED DETECTED - Status: "${match.status}" contains pattern: "${pattern}"`);
+          return true;
+        }
       }
     }
 
-    // Tarih kontrolü
+    // Tarih kontrolü - DETAYLI DEBUG
     if (match.date) {
       const dateLower = match.date.toLowerCase();
-      if (postponedPatterns.some(pattern => dateLower.includes(pattern))) {
-        return true;
+      for (const pattern of postponedPatterns) {
+        if (dateLower.includes(pattern)) {
+          console.log(`🚫 POSTPONED DETECTED - Date: "${match.date}" contains pattern: "${pattern}"`);
+          return true;
+        }
       }
     }
 
-    // Takım adı kontrolü
+    // Takım adı kontrolü - DETAYLI DEBUG
     const homeTeamLower = match.homeTeam?.name?.toLowerCase() || '';
     const awayTeamLower = match.awayTeam?.name?.toLowerCase() || '';
     
-    if (postponedPatterns.some(pattern => 
-      homeTeamLower.includes(pattern) || awayTeamLower.includes(pattern)
-    )) {
-      return true;
+    for (const pattern of postponedPatterns) {
+      if (homeTeamLower.includes(pattern) || awayTeamLower.includes(pattern)) {
+        console.log(`🚫 POSTPONED DETECTED - Team name contains pattern: "${pattern}"`);
+        return true;
+      }
     }
 
-    // ⏰ Time kontrolü (şüpheli saatler)
+    // ⏰ Time kontrolü - DETAYLI DEBUG
     if (match.time) {
       const timeLower = match.time.toLowerCase();
-      if (postponedPatterns.some(pattern => timeLower.includes(pattern))) {
-        return true;
+      for (const pattern of postponedPatterns) {
+        if (timeLower.includes(pattern)) {
+          console.log(`🚫 POSTPONED DETECTED - Time: "${match.time}" contains pattern: "${pattern}"`);
+          return true;
+        }
       }
       
-      // 00:30 veya 00:00 gibi şüpheli saatler
-      if (timeLower.includes('00:30') || timeLower.includes('00:00')) {
-        console.log(`🚫 Suspicious time detected: ${match.time} for ${match.homeTeam?.name} vs ${match.awayTeam?.name}`);
+      // 🔧 SADECE BELİRGİN ŞÜPHELİ SAATLER (strict equality)
+      if (timeLower === '00:30' || timeLower === '00:00' || timeLower === '--:--') {
+        console.log(`🚫 SUSPICIOUS TIME: ${match.time} for ${match.homeTeam?.name} vs ${match.awayTeam?.name}`);
         return true;
       }
     }
 
+    console.log(`✅ POSTPONED CHECK PASSED: ${match.homeTeam?.name} vs ${match.awayTeam?.name}`);
     return false;
   }
 
