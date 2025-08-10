@@ -331,61 +331,9 @@ export class SupabaseService {
     return data ? { ...data, teamId: data.team_id } : null;
   }
 
-  // 🧹 Ertelenen maçları temizle
+  // 🧹 Postponed maçları zaten veritabanına yazmıyoruz, temizleme gereksiz
   async cleanPostponedMatches(): Promise<number> {
-    try {
-      console.log('🧹 Cleaning postponed matches from database...');
-      
-      // Ertelenen maç kalıpları
-      const postponedPatterns = [
-        '%ertelendi%',
-        '%postponed%', 
-        '%delayed%',
-        '%tbd%',
-        '%to be determined%',
-        '%saat blrsz%',
-        '%saat belli değil%',
-        '%time tbc%',
-        '%time tbd%'
-      ];
-      
-      let totalDeleted = 0;
-      
-      // Her pattern için kontrol et
-      for (const pattern of postponedPatterns) {
-        const { data: matches, error: fetchError } = await this.client
-          .from('matches')
-          .select('id, date, home_team_id, away_team_id')
-          .or(`date.ilike.${pattern},broadcast_channel.ilike.${pattern}`);
-          
-        if (fetchError) {
-          console.error(`Error fetching postponed matches for pattern ${pattern}:`, fetchError);
-          continue;
-        }
-        
-        if (matches && matches.length > 0) {
-          console.log(`🗑️ Found ${matches.length} postponed matches with pattern: ${pattern}`);
-          
-          const { error: deleteError, count } = await this.client
-            .from('matches')
-            .delete()
-            .or(`date.ilike.${pattern},broadcast_channel.ilike.${pattern}`);
-            
-          if (deleteError) {
-            console.error(`Error deleting postponed matches:`, deleteError);
-          } else {
-            totalDeleted += count || 0;
-            console.log(`✅ Deleted ${count || 0} postponed matches`);
-          }
-        }
-      }
-      
-      console.log(`🧹 Total postponed matches cleaned: ${totalDeleted}`);
-      return totalDeleted;
-      
-    } catch (error) {
-      console.error('Error cleaning postponed matches:', error);
-      return 0;
-    }
+    console.log('🧹 Postponed matches are already filtered before database insertion. No cleaning needed.');
+    return 0;
   }
 }
