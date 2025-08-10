@@ -174,7 +174,7 @@ OPENROUTER_API_KEY=your_openrouter_api_key
 ```
 
 ### Render Avantajları
-- ✅ Gerçekten ücretsiz
+- ✅ Gerçekten ücretsiz,çok iyi
 - ✅ Otomatik SSL sertifikası
 - ✅ GitHub auto-deployment
 - ✅ Crash recovery
