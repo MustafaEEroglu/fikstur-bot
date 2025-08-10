@@ -135,7 +135,10 @@ export class FixtureSyncService {
       'match postponed', 'fixture postponed', 'game postponed',
       'vs delayed', 'vs suspended', 'vs abandoned',
       'vs called off', 'vs rescheduled', 'vs iptal',
-      'tarihi değişti', 'tarih belli değil', 'tarih belirsiz'
+      'tarihi değişti', 'tarih belli değil', 'tarih belirsiz',
+      'saat belirsiz', 'saat belli değil', 'time tbd', 'time unknown',
+      'hour unknown', 'saati bilinmiyor', 'ertelendi saat belirsiz',
+      '00:30', '00:00' // Şüpheli saatler
     ];
 
     // Status kontrolü
@@ -162,6 +165,20 @@ export class FixtureSyncService {
       homeTeamLower.includes(pattern) || awayTeamLower.includes(pattern)
     )) {
       return true;
+    }
+
+    // ⏰ Time kontrolü (şüpheli saatler)
+    if (match.time) {
+      const timeLower = match.time.toLowerCase();
+      if (postponedPatterns.some(pattern => timeLower.includes(pattern))) {
+        return true;
+      }
+      
+      // 00:30 veya 00:00 gibi şüpheli saatler
+      if (timeLower.includes('00:30') || timeLower.includes('00:00')) {
+        console.log(`🚫 Suspicious time detected: ${match.time} for ${match.homeTeam?.name} vs ${match.awayTeam?.name}`);
+        return true;
+      }
     }
 
     return false;

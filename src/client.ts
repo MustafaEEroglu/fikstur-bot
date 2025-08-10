@@ -298,7 +298,15 @@ export class DiscordClient extends Client {
 
       let description = '';
       for (const match of matches) {
-        const date = format(new Date(match.date), 'dd.MM.yyyy HH:mm');
+        // 🇹🇷 Veritabanından gelen UTC tarihini Türkiye saatine çevir
+        const utcDate = new Date(match.date);
+        const turkeyDate = new Date(utcDate.getTime() + (3 * 60 * 60 * 1000)); // UTC+3
+        const date = format(turkeyDate, 'dd.MM.yyyy HH:mm');
+        
+        console.log(`📅 Match time conversion: ${match.homeTeam.name} vs ${match.awayTeam.name}`);
+        console.log(`   🕐 UTC: ${utcDate.toISOString()}`);
+        console.log(`   🇹🇷 Turkey: ${turkeyDate.toISOString()} → ${date}`);
+        
         description += `**${match.homeTeam.name} vs ${match.awayTeam.name}**\n`;
         description += `📅 ${date} - 🏟️ ${match.league}\n\n`;
       }

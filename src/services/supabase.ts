@@ -58,38 +58,25 @@ export class SupabaseService {
     notified?: boolean;
     voice_room_created?: boolean;
   }): Promise<Match> {
-    // First check if match already exists
-    const existingMatch = await this.adminClient
+    console.log(`🔄 Upserting match: ${matchData.home_team_id} vs ${matchData.away_team_id} on ${matchData.date} ${matchData.time}`);
+    
+    // 🛡️ PostgreSQL UPSERT kullan (çakışmada güncelle)
+    const { data, error } = await this.adminClient
       .from('matches')
-      .select('id')
-      .eq('home_team_id', matchData.home_team_id)
-      .eq('away_team_id', matchData.away_team_id)
-      .eq('date', matchData.date)
-      .eq('league', matchData.league)
+      .upsert(matchData, { 
+        onConflict: 'home_team_id,away_team_id,date,time,league',  // Unique constraint tanımı
+        ignoreDuplicates: false  // Çakışmada güncelle
+      })
+      .select()
       .single();
 
-    if (existingMatch.data) {
-      // Match exists, update it
-      const { data, error } = await this.adminClient
-        .from('matches')
-        .update(matchData)
-        .eq('id', existingMatch.data.id)
-        .select()
-        .single();
-
-      if (error) throw new Error(`Error updating match: ${error.message}`);
-      return data;
-    } else {
-      // Match doesn't exist, insert it
-      const { data, error } = await this.adminClient
-        .from('matches')
-        .insert(matchData)
-        .select()
-        .single();
-
-      if (error) throw new Error(`Error inserting match: ${error.message}`);
-      return data;
+    if (error) {
+      console.error(`❌ Upsert error for match ${matchData.home_team_id} vs ${matchData.away_team_id}:`, error);
+      throw new Error(`Error upserting match: ${error.message}`);
     }
+    
+    console.log(`✅ Match upserted successfully: ${data.id}`);
+    return data;
   }
 
   // 🧹 TÜM MAÇLARI TEMİZLE (Her sync'te kullanılacak)
