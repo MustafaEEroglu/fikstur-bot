@@ -105,7 +105,11 @@ export class SerpApiService {
         }
         
         today.setHours(hour, minute, 0, 0);
-        return today;
+        
+        // 🇹🇷 TÜRKİYE SAATİNE ÇEVİR (UTC+3)
+        const turkeyTime = new Date(today.getTime() + (3 * 60 * 60 * 1000));
+        console.log(`✅ parseGameDate: TODAY AM/PM - ${hour}:${minute} UTC -> ${turkeyTime.toISOString()} (Turkey UTC+3)`);
+        return turkeyTime;
       }
       
       // Handle "today HH:MM XM" format (virgül olmadan)
@@ -122,7 +126,11 @@ export class SerpApiService {
         }
         
         today.setHours(hour, minute, 0, 0);
-        return today;
+        
+        // 🇹🇷 TÜRKİYE SAATİNE ÇEVİR (UTC+3)
+        const turkeyTime = new Date(today.getTime() + (3 * 60 * 60 * 1000));
+        console.log(`✅ parseGameDate: TODAY AM/PM NoComma - ${hour}:${minute} UTC -> ${turkeyTime.toISOString()} (Turkey UTC+3)`);
+        return turkeyTime;
       }
       
       // Handle "today HH:XX" format (AM/PM olmadan - 24 saat) - HEM VIRGÜLLÜ HEM VİRGÜLSÜZ
@@ -136,8 +144,13 @@ export class SerpApiService {
         // 24 saat formatında geçerli saat kontrolü
         if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
           today.setHours(hour, minute, 0, 0);
-          console.log(`✅ parseGameDate: TODAY 24h - ${hour}:${minute} -> ${today.toISOString()}`);
-          return today;
+          
+          // 🇹🇷 TÜRKİYE SAATİNE ÇEVİR (UTC+3)
+          // SerpAPI UTC veriyor, Türkiye saatine çevirmemiz gerekiyor
+          const turkeyTime = new Date(today.getTime() + (3 * 60 * 60 * 1000));
+          
+          console.log(`✅ parseGameDate: TODAY 24h - ${hour}:${minute} UTC -> ${turkeyTime.toISOString()} (Turkey UTC+3)`);
+          return turkeyTime;
         } else {
           console.log(`❌ parseGameDate: Invalid 24h time - ${hour}:${minute}`);
         }
@@ -163,7 +176,11 @@ export class SerpApiService {
         }
         
         tomorrow.setHours(hour, minute, 0, 0);
-        return tomorrow;
+        
+        // 🇹🇷 TÜRKİYE SAATİNE ÇEVİR (UTC+3)
+        const turkeyTime = new Date(tomorrow.getTime() + (3 * 60 * 60 * 1000));
+        console.log(`✅ parseGameDate: TOMORROW AM/PM - ${hour}:${minute} UTC -> ${turkeyTime.toISOString()} (Turkey UTC+3)`);
+        return turkeyTime;
       }
       
       // Handle "tomorrow HH:MM XM" format (virgülsüz)
@@ -180,7 +197,11 @@ export class SerpApiService {
         }
         
         tomorrow.setHours(hour, minute, 0, 0);
-        return tomorrow;
+        
+        // 🇹🇷 TÜRKİYE SAATİNE ÇEVİR (UTC+3)
+        const turkeyTime = new Date(tomorrow.getTime() + (3 * 60 * 60 * 1000));
+        console.log(`✅ parseGameDate: TOMORROW AM/PM NoComma - ${hour}:${minute} UTC -> ${turkeyTime.toISOString()} (Turkey UTC+3)`);
+        return turkeyTime;
       }
       
       // Handle "tomorrow HH:XX" format (AM/PM olmadan - 24 saat) - HEM VIRGÜLLÜ HEM VİRGÜLSÜZ  
@@ -194,8 +215,12 @@ export class SerpApiService {
         // 24 saat formatında geçerli saat kontrolü
         if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
           tomorrow.setHours(hour, minute, 0, 0);
-          console.log(`✅ parseGameDate: TOMORROW 24h - ${hour}:${minute} -> ${tomorrow.toISOString()}`);
-          return tomorrow;
+          
+          // 🇹🇷 TÜRKİYE SAATİNE ÇEVİR (UTC+3)
+          const turkeyTime = new Date(tomorrow.getTime() + (3 * 60 * 60 * 1000));
+          
+          console.log(`✅ parseGameDate: TOMORROW 24h - ${hour}:${minute} UTC -> ${turkeyTime.toISOString()} (Turkey UTC+3)`);
+          return turkeyTime;
         } else {
           console.log(`❌ parseGameDate: Invalid 24h time for tomorrow - ${hour}:${minute}`);
         }

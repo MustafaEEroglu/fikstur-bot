@@ -85,11 +85,17 @@ export class DiscordClient extends Client {
       ]);
     }, INTERVALS.MATCH_CHECK);
 
+    // 🧹 Voice room cleanup every 5 minutes (EKLENDİ!)
+    setInterval(async () => {
+      await this.cleanupExpiredVoiceRooms();
+    }, 5 * 60 * 1000); // 5 dakika
+
     // Initial check
     (async () => {
       await Promise.all([
         this.checkForMatches(),
-        this.checkForVoiceRooms()
+        this.checkForVoiceRooms(),
+        this.cleanupExpiredVoiceRooms() // İlk başta da cleanup
       ]);
     })();
   }
@@ -580,6 +586,51 @@ export class DiscordClient extends Client {
       }
     } catch (notificationError) {
       console.error('Failed to send sync notification:', notificationError);
+    }
+  }
+
+  // 🧹 VOICE ROOM CLEANUP METODU  
+  private async cleanupExpiredVoiceRooms() {
+    try {
+      console.log('🧹 Starting voice room cleanup...');
+      
+      // Her guild'de voice channel'ları kontrol et
+      for (const guild of this.guilds.cache.values()) {
+        const voiceChannels = guild.channels.cache.filter(channel => 
+          channel.type === 2 && // Voice channel
+          channel.name.includes('vs') && // Match pattern
+          channel.name.includes('🏟️') // Our match channels
+        );
+
+        console.log(`🔍 Found ${voiceChannels.size} potential match voice channels in ${guild.name}`);
+
+        for (const channel of voiceChannels.values()) {
+          try {
+            // Channel creation time'ını kontrol et (2 saatten eski mi?)
+            if (channel.createdTimestamp) {
+              const channelAge = Date.now() - channel.createdTimestamp;
+              const twoHoursInMs = 2 * 60 * 60 * 1000;
+
+              if (channelAge > twoHoursInMs && 'deletable' in channel && channel.deletable) {
+                console.log(`🗑️ Deleting expired voice room (${Math.floor(channelAge / 60000)}min old): ${channel.name}`);
+                await channel.delete();
+                console.log(`✅ Successfully deleted: ${channel.name}`);
+                
+                // Voice channel map'ten de kaldır
+                this.voiceChannels.delete(channel.id);
+              } else if (channelAge > twoHoursInMs) {
+                console.log(`⚠️ Channel too old but not deletable: ${channel.name}`);
+              }
+            }
+          } catch (deleteError) {
+            console.error(`❌ Error deleting voice room ${channel.name}:`, deleteError);
+          }
+        }
+      }
+
+      console.log('✅ Voice room cleanup completed');
+    } catch (error) {
+      console.error('❌ Error in cleanupExpiredVoiceRooms:', error);
     }
   }
 
