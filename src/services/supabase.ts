@@ -60,23 +60,63 @@ export class SupabaseService {
   }): Promise<Match> {
     console.log(`🔄 Upserting match: ${matchData.home_team_id} vs ${matchData.away_team_id} on ${matchData.date} ${matchData.time}`);
     
-    // 🛡️ PostgreSQL UPSERT kullan (çakışmada güncelle)
-    const { data, error } = await this.adminClient
-      .from('matches')
-      .upsert(matchData, { 
-        onConflict: 'home_team_id,away_team_id,date,time,league',  // Unique constraint tanımı
-        ignoreDuplicates: false  // Çakışmada güncelle
-      })
-      .select()
-      .single();
+    try {
+      // � Önce mevcut maçı ara (Unique constraint yerine manuel kontrol)
+      const { data: existingMatches, error: searchError } = await this.adminClient
+        .from('matches')
+        .select('id')
+        .eq('home_team_id', matchData.home_team_id)
+        .eq('away_team_id', matchData.away_team_id)
+        .eq('date', matchData.date)
+        .eq('time', matchData.time)
+        .eq('league', matchData.league);
 
-    if (error) {
-      console.error(`❌ Upsert error for match ${matchData.home_team_id} vs ${matchData.away_team_id}:`, error);
-      throw new Error(`Error upserting match: ${error.message}`);
+      if (searchError) {
+        console.error(`❌ Search error:`, searchError);
+        throw new Error(`Error searching for existing match: ${searchError.message}`);
+      }
+
+      if (existingMatches && existingMatches.length > 0) {
+        // 🔄 Maç mevcut, güncelle
+        const existingId = existingMatches[0].id;
+        console.log(`🔄 Updating existing match ID: ${existingId}`);
+        
+        const { data, error } = await this.adminClient
+          .from('matches')
+          .update(matchData)
+          .eq('id', existingId)
+          .select()
+          .single();
+
+        if (error) {
+          console.error(`❌ Update error:`, error);
+          throw new Error(`Error updating match: ${error.message}`);
+        }
+        
+        console.log(`✅ Match updated successfully: ${data.id}`);
+        return data;
+      } else {
+        // ➕ Yeni maç, ekle
+        console.log(`➕ Inserting new match`);
+        
+        const { data, error } = await this.adminClient
+          .from('matches')
+          .insert(matchData)
+          .select()
+          .single();
+
+        if (error) {
+          console.error(`❌ Insert error:`, error);
+          throw new Error(`Error inserting match: ${error.message}`);
+        }
+        
+        console.log(`✅ Match inserted successfully: ${data.id}`);
+        return data;
+      }
+    } catch (error) {
+      console.error(`❌ Critical upsert error for match ${matchData.home_team_id} vs ${matchData.away_team_id}:`, error);
+      throw error;
     }
-    
-    console.log(`✅ Match upserted successfully: ${data.id}`);
-    return data;
   }
 
   // 🧹 TÜM MAÇLARI TEMİZLE (Her sync'te kullanılacak)
