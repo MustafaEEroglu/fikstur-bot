@@ -61,15 +61,15 @@ export class SupabaseService {
     console.log(`🔄 Upserting match: ${matchData.home_team_id} vs ${matchData.away_team_id} on ${matchData.date} ${matchData.time}`);
     
     try {
-      // � Önce mevcut maçı ara (Unique constraint yerine manuel kontrol)
+      // � GERÇEK UNIQUE CONSTRAINT: (home_team_id, away_team_id, date, league) - TIME YOK!
       const { data: existingMatches, error: searchError } = await this.adminClient
         .from('matches')
         .select('id')
         .eq('home_team_id', matchData.home_team_id)
         .eq('away_team_id', matchData.away_team_id)
         .eq('date', matchData.date)
-        .eq('time', matchData.time)
         .eq('league', matchData.league);
+        // ⚠️ TIME ALANI UNIQUE CONSTRAINT'TE YOK - ARAMA YAPARKEN DE KULLANMIYORUZ!
 
       if (searchError) {
         console.error(`❌ Search error:`, searchError);
@@ -77,9 +77,9 @@ export class SupabaseService {
       }
 
       if (existingMatches && existingMatches.length > 0) {
-        // 🔄 Maç mevcut, güncelle
+        // 🔄 Maç mevcut, güncelle (TIME güncellenebilir)
         const existingId = existingMatches[0].id;
-        console.log(`🔄 Updating existing match ID: ${existingId}`);
+        console.log(`🔄 Updating existing match ID: ${existingId} (Constraint: home:${matchData.home_team_id} vs away:${matchData.away_team_id}, date:${matchData.date}, league:${matchData.league})`);
         
         const { data, error } = await this.adminClient
           .from('matches')
@@ -93,11 +93,11 @@ export class SupabaseService {
           throw new Error(`Error updating match: ${error.message}`);
         }
         
-        console.log(`✅ Match updated successfully: ${data.id}`);
+        console.log(`✅ Match updated successfully: ${data.id} (Time may have changed: ${matchData.time})`);
         return data;
       } else {
         // ➕ Yeni maç, ekle
-        console.log(`➕ Inserting new match`);
+        console.log(`➕ Inserting new match (Unique: home:${matchData.home_team_id} vs away:${matchData.away_team_id}, date:${matchData.date}, league:${matchData.league}, time:${matchData.time})`);
         
         const { data, error } = await this.adminClient
           .from('matches')
@@ -107,6 +107,27 @@ export class SupabaseService {
 
         if (error) {
           console.error(`❌ Insert error:`, error);
+          
+          // Son çare: Constraint violation olursa force update dene
+          if (error.code === '23505') {
+            console.log(`🔄 Duplicate detected, trying force update...`);
+            const { data: forceUpdateData, error: forceError } = await this.adminClient
+              .from('matches')
+              .update(matchData)
+              .eq('home_team_id', matchData.home_team_id)
+              .eq('away_team_id', matchData.away_team_id)
+              .eq('date', matchData.date)
+              .eq('league', matchData.league)
+              .select()
+              .single();
+              
+            if (forceError) {
+              throw new Error(`Error in force update: ${forceError.message}`);
+            }
+            console.log(`✅ Force update successful: ${forceUpdateData.id}`);
+            return forceUpdateData;
+          }
+          
           throw new Error(`Error inserting match: ${error.message}`);
         }
         
